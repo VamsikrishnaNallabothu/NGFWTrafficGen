@@ -5,34 +5,71 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Find required packages
-find_package(DPDK REQUIRED)
-find_package(gRPC REQUIRED)
-find_package(Protobuf REQUIRED)
-find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
+# --- Build gRPC from Source using FetchContent ---
+include(FetchContent)
 
-# DPDK configuration
-set(DPDK_LIB_DIR "${DPDK_ROOT}/lib")
-set(DPDK_INCLUDE_DIR "${DPDK_ROOT}/include")
+set(gRPC_INSTALL OFF)
+set(gRPC_BUILD_TESTS OFF)
+set(gRPC_ABSL_PROVIDER "module")
+set(gRPC_CARES_PROVIDER "module")
+set(gRPC_PROTOBUF_PROVIDER "module")
+set(gRPC_RE2_PROVIDER "module")
+set(gRPC_SSL_PROVIDER "package")
+set(gRPC_ZLIB_PROVIDER "package")
 
-# Include directories
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${DPDK_INCLUDE_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/proto
+FetchContent_Declare(
+  gRPC
+  GIT_REPOSITORY https://github.com/grpc/grpc.git
+  GIT_TAG        v1.54.2
 )
 
-# gRPC and Protobuf
+FetchContent_MakeAvailable(gRPC)
+# --- End of gRPC Build ---
+
+
+# --- Find System-Provided Dependencies ---
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(DPDK REQUIRED libdpdk)
+
+# Find NUMA manually to bypass the problematic pkg-config environment.
+find_path(NUMA_INCLUDE_DIR numa.h)
+find_library(NUMA_LIBRARY NAMES numa)
+if(NOT NUMA_INCLUDE_DIR OR NOT NUMA_LIBRARY)
+    message(FATAL_ERROR "Could not find NUMA library or headers. Please ensure libnuma-dev is installed.")
+endif()
+
+find_package(Threads REQUIRED)
+# --- End of System Dependencies ---
+
+
+# --- Protobuf and gRPC Code Generation ---
+# When building with FetchContent, the targets do not have the gRPC:: namespace.
+# We use the plain target names provided by the sub-build.
 set(PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/proto")
 set(PROTO_FILES "${PROTO_PATH}/traffic_generator.proto")
-
-# Set output directory for generated proto files
 set(PROTO_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto")
 
-# Generate protobuf and gRPC files
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES} OUTPUT_DIR ${PROTO_OUT_DIR})
-grpc_generate_cpp(GRPC_SRCS GRPC_HDRS ${PROTO_FILES} OUTPUT_DIR ${PROTO_OUT_DIR})
+# Ensure the output directory for generated files exists before we try to use it.
+file(MAKE_DIRECTORY ${PROTO_OUT_DIR})
+
+add_custom_command(
+    OUTPUT  "${PROTO_OUT_DIR}/traffic_generator.pb.cc"
+            "${PROTO_OUT_DIR}/traffic_generator.pb.h"
+            "${PROTO_OUT_DIR}/traffic_generator.grpc.pb.cc"
+            "${PROTO_OUT_DIR}/traffic_generator.grpc.pb.h"
+    COMMAND $<TARGET_FILE:protoc>
+            --proto_path=${PROTO_PATH}
+            --cpp_out=${PROTO_OUT_DIR}
+            --grpc_out=${PROTO_OUT_DIR}
+            --plugin=protoc-gen-grpc=$<TARGET_FILE:grpc_cpp_plugin>
+            ${PROTO_FILES}
+    DEPENDS ${PROTO_FILES}
+    COMMENT "Generating Protobuf and gRPC C++ sources"
+)
+
+set(PROTO_SRCS "${PROTO_OUT_DIR}/traffic_generator.pb.cc")
+set(GRPC_SRCS "${PROTO_OUT_DIR}/traffic_generator.grpc.pb.cc")
+# --- End of Code Generation ---
 
 # Source files
 set(CORE_SOURCES
@@ -63,13 +100,21 @@ set(SOURCES
 # Executable
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-# Link libraries
+# Add all necessary include directories for the target.
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${DPDK_INCLUDE_DIRS}
+    ${NUMA_INCLUDE_DIR} # Use the path from the manual find
+    ${PROTO_OUT_DIR}    # Add directory for generated headers
+)
+
+# Link libraries using the variables and imported targets.
+# When using FetchContent, the main library target is just 'grpc++'.
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${DPDK_LIBRARIES}
-    gRPC::grpc++
-    protobuf::libprotobuf
+    ${NUMA_LIBRARY} # Use the library from the manual find
+    grpc++
     Threads::Threads
-    numa
     pthread
     dl
 )
@@ -93,6 +138,5 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     RTE_MACHINE_CPUFLAG_SSE4_2
 )
 
-# Install targets
+# Install target
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
-
