@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <rte_version.h>
 
 namespace trafficgen {
 
@@ -108,9 +109,14 @@ void PacketBuilder::build_ethernet_header(rte_ether_hdr* eth_hdr,
         return;
     }
     
-    // DPDK uses dst_addr/src_addr in newer releases (d_addr/s_addr were older)
+    // DPDK field rename in 21.11: d_addr/s_addr -> dst_addr/src_addr
+#if RTE_VERSION >= RTE_VERSION_NUM(21, 11, 0, 0)
     mac_to_bytes(dst_mac, eth_hdr->dst_addr.addr_bytes);
     mac_to_bytes(src_mac, eth_hdr->src_addr.addr_bytes);
+#else
+    mac_to_bytes(dst_mac, eth_hdr->d_addr.addr_bytes);
+    mac_to_bytes(src_mac, eth_hdr->s_addr.addr_bytes);
+#endif
     eth_hdr->ether_type = rte_cpu_to_be_16(ether_type);
 }
 

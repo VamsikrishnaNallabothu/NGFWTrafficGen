@@ -225,11 +225,11 @@ std::vector<uint32_t> FlowScheduler::get_active_flows() const {
     return active_flows;
 }
 
-std::unordered_map<uint32_t, FlowConfigInternal> FlowScheduler::get_all_flows_snapshot() const {
+std::unordered_map<uint32_t, FlowSnapshot> FlowScheduler::get_all_flows_snapshot() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    std::unordered_map<uint32_t, FlowConfigInternal> copy;
+    std::unordered_map<uint32_t, FlowSnapshot> copy;
     for (const auto& [id, cfg_ptr] : flows_) {
-        FlowConfigInternal snap;
+        FlowSnapshot snap{};
         snap.flow_id = cfg_ptr->flow_id;
         snap.flow_key = cfg_ptr->flow_key;
         snap.packet_size = cfg_ptr->packet_size;
@@ -237,16 +237,11 @@ std::unordered_map<uint32_t, FlowConfigInternal> FlowScheduler::get_all_flows_sn
         snap.pps = cfg_ptr->pps;
         snap.duration_seconds = cfg_ptr->duration_seconds;
         snap.stateless = cfg_ptr->stateless;
-        snap.template_packet = cfg_ptr->template_packet;
-        snap.packets_sent.store(cfg_ptr->packets_sent.load(std::memory_order_relaxed),
-                                std::memory_order_relaxed);
-        snap.bytes_sent.store(cfg_ptr->bytes_sent.load(std::memory_order_relaxed),
-                              std::memory_order_relaxed);
-        snap.start_time_ns.store(cfg_ptr->start_time_ns.load(std::memory_order_relaxed),
-                                 std::memory_order_relaxed);
-        snap.active.store(cfg_ptr->active.load(std::memory_order_relaxed),
-                          std::memory_order_relaxed);
-        copy.emplace(id, std::move(snap));
+        snap.packets_sent = cfg_ptr->packets_sent.load(std::memory_order_relaxed);
+        snap.bytes_sent = cfg_ptr->bytes_sent.load(std::memory_order_relaxed);
+        snap.start_time_ns = cfg_ptr->start_time_ns.load(std::memory_order_relaxed);
+        snap.active = cfg_ptr->active.load(std::memory_order_relaxed);
+        copy.emplace(id, snap);
     }
     return copy;
 }

@@ -36,6 +36,21 @@ struct FlowConfigInternal {
 
 // Note: Proto generates FlowConfig class - use FlowConfigInternal internally
 
+// Lightweight, copyable snapshot for reporting.
+struct FlowSnapshot {
+    uint32_t flow_id;
+    FlowKey flow_key;
+    uint32_t packet_size;
+    std::string protocol;
+    uint64_t pps;
+    uint32_t duration_seconds;
+    bool stateless;
+    uint64_t packets_sent;
+    uint64_t bytes_sent;
+    uint64_t start_time_ns;
+    bool active;
+};
+
 /**
  * Flow scheduler for managing multiple traffic flows
  * Supports both stateless and stateful (TCP) flows
@@ -72,8 +87,8 @@ public:
     // Get all active flows
     std::vector<uint32_t> get_active_flows() const;
     
-    // Get snapshot of per-flow statistics (flow_id -> FlowConfigInternal copy)
-    std::unordered_map<uint32_t, FlowConfigInternal> get_all_flows_snapshot() const;
+    // Get snapshot of per-flow statistics (flow_id -> FlowSnapshot copy)
+    std::unordered_map<uint32_t, FlowSnapshot> get_all_flows_snapshot() const;
 
     // Handle an incoming TCP packet (RX path) for stateful flows.
     void handle_tcp_rx(const FlowKey& key,

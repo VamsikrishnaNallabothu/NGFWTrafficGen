@@ -245,11 +245,11 @@ grpc::Status TrafficGeneratorServiceImpl::GetStats(
     if (request->detailed() && flow_scheduler_) {
         auto flows = flow_scheduler_->get_all_flows_snapshot();
         for (const auto& kv : flows) {
-            const FlowConfigInternal& cfg = kv.second;
+            const FlowSnapshot& cfg = kv.second;
             FlowStats& fs = (*response->mutable_flow_stats())[cfg.flow_id];
             fs.set_flow_id(cfg.flow_id);
-            uint64_t pkts = cfg.packets_sent.load(std::memory_order_relaxed);
-            uint64_t bytes = cfg.bytes_sent.load(std::memory_order_relaxed);
+            uint64_t pkts = cfg.packets_sent;
+            uint64_t bytes = cfg.bytes_sent;
             fs.set_tx_packets(pkts);
             fs.set_tx_bytes(bytes);
 
