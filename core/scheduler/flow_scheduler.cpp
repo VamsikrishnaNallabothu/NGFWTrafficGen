@@ -17,46 +17,69 @@ bool FlowScheduler::initialize() {
 bool FlowScheduler::add_flow(const FlowConfigInternal& config) {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    FlowConfigInternal new_config = config;
+    auto new_config = std::make_shared<FlowConfigInternal>();
+    new_config->flow_id = config.flow_id;
+    new_config->flow_key = config.flow_key;
+    new_config->packet_size = config.packet_size;
+    new_config->protocol = config.protocol;
+    new_config->pps = config.pps;
+    new_config->duration_seconds = config.duration_seconds;
+    new_config->stateless = config.stateless;
+    new_config->template_packet = config.template_packet;
+    new_config->packets_sent.store(config.packets_sent.load(std::memory_order_relaxed),
+                                   std::memory_order_relaxed);
+    new_config->bytes_sent.store(config.bytes_sent.load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+    new_config->start_time_ns.store(config.start_time_ns.load(std::memory_order_relaxed),
+                                    std::memory_order_relaxed);
+    new_config->active.store(config.active.load(std::memory_order_relaxed),
+                             std::memory_order_relaxed);
     
     // Build packet template if not already built
-    if (new_config.template_packet.data.empty()) {
+    if (new_config->template_packet.data.empty()) {
         if (!packet_builder_.build_template(
-                new_config.template_packet,
-                new_config.flow_key,
-                new_config.packet_size,
-                new_config.protocol)) {
+                new_config->template_packet,
+                new_config->flow_key,
+                new_config->packet_size,
+                new_config->protocol)) {
             return false;
         }
     }
     
     // Create token bucket for rate limiting
-    if (!new_config.token_bucket) {
-        new_config.token_bucket = std::make_unique<TokenBucket>(
-            new_config.pps, new_config.pps / 10);  // Burst = 10% of rate
+    if (config.token_bucket) {
+        new_config->token_bucket = std::make_unique<TokenBucket>(
+            config.token_bucket->get_rate(), config.token_bucket->get_burst_size());
+    } else {
+        new_config->token_bucket = std::make_unique<TokenBucket>(
+            new_config->pps, new_config->pps / 10);  // Burst = 10% of rate
     }
 
     // Initialize TCP state for stateful TCP flows
-    if (!new_config.stateless && new_config.protocol == "tcp") {
-        if (!new_config.tcp_state) {
-            new_config.tcp_state = std::make_unique<TCPConnectionState>();
-            new_config.tcp_state->src_ip = new_config.flow_key.src_ip;
-            new_config.tcp_state->dst_ip = new_config.flow_key.dst_ip;
-            new_config.tcp_state->src_port = new_config.flow_key.src_port;
-            new_config.tcp_state->dst_port = new_config.flow_key.dst_port;
-            new_config.tcp_state->state = TCPConnectionState::State::CLOSED;
-            new_config.tcp_state->active = false;
+    if (!new_config->stateless && new_config->protocol == "tcp") {
+        if (config.tcp_state) {
+            new_config->tcp_state = std::make_unique<TCPConnectionState>(*config.tcp_state);
+        } else {
+            new_config->tcp_state = std::make_unique<TCPConnectionState>();
+            new_config->tcp_state->src_ip = new_config->flow_key.src_ip;
+            new_config->tcp_state->dst_ip = new_config->flow_key.dst_ip;
+            new_config->tcp_state->src_port = new_config->flow_key.src_port;
+            new_config->tcp_state->dst_port = new_config->flow_key.dst_port;
+            new_config->tcp_state->state = TCPConnectionState::State::CLOSED;
+            new_config->tcp_state->active = false;
         }
-        if (!new_config.tcp_state_machine) {
-            new_config.tcp_state_machine = std::make_unique<TCPStateMachine>();
+        if (config.tcp_state_machine) {
+            new_config->tcp_state_machine = std::make_unique<TCPStateMachine>(*config.tcp_state_machine);
+        } else {
+            new_config->tcp_state_machine = std::make_unique<TCPStateMachine>();
         }
     }
     
     // Insert / update flow
-    flows_[config.flow_id] = std::move(new_config);
+    flows_[config.flow_id] = new_config;
 
     // Update lookup table for RX path (both directions)
-    const FlowConfigInternal& stored = flows_[config.flow_id];
+    const FlowConfigInternal& stored = *flows_[config.flow_id];
     flow_lookup_[stored.flow_key] = config.flow_id;
     // Reverse key for inbound packets
     FlowKey reverse_key = stored.flow_key;
@@ -75,7 +98,7 @@ bool FlowScheduler::remove_flow(uint32_t flow_id) {
     }
 
     // Remove from lookup map (both directions)
-    FlowKey key = it->second.flow_key;
+    FlowKey key = it->second->flow_key;
     flow_lookup_.erase(key);
     FlowKey reverse_key = key;
     std::swap(reverse_key.src_ip, reverse_key.dst_ip);
@@ -98,13 +121,13 @@ bool FlowScheduler::start_flow(uint32_t flow_id) {
     auto duration = now.time_since_epoch();
     uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
     
-    it->second.start_time_ns.store(now_ns, std::memory_order_relaxed);
-    it->second.active.store(true, std::memory_order_relaxed);
+    it->second->start_time_ns.store(now_ns, std::memory_order_relaxed);
+    it->second->active.store(true, std::memory_order_relaxed);
 
     // Initialize TCP connection state for stateful TCP flows
-    if (!it->second.stateless && it->second.protocol == "tcp" &&
-        it->second.tcp_state) {
-        TCPConnectionState& conn = *it->second.tcp_state;
+    if (!it->second->stateless && it->second->protocol == "tcp" &&
+        it->second->tcp_state) {
+        TCPConnectionState& conn = *it->second->tcp_state;
         conn.state = TCPConnectionState::State::ESTABLISHED;
         conn.active = true;
         // Simple initial sequence number
@@ -112,8 +135,8 @@ bool FlowScheduler::start_flow(uint32_t flow_id) {
         conn.recv_seq = 0;
     }
     
-    if (it->second.token_bucket) {
-        it->second.token_bucket->reset();
+    if (it->second->token_bucket) {
+        it->second->token_bucket->reset();
     }
     
     return true;
@@ -127,7 +150,7 @@ bool FlowScheduler::stop_flow(uint32_t flow_id) {
         return false;
     }
     
-    it->second.active.store(false, std::memory_order_relaxed);
+    it->second->active.store(false, std::memory_order_relaxed);
     return true;
 }
 
@@ -136,14 +159,20 @@ std::vector<uint32_t> FlowScheduler::get_ready_flows(uint32_t max_flows) {
     
     std::vector<uint32_t> ready_flows;
     ready_flows.reserve(max_flows);
+
+    auto now = std::chrono::steady_clock::now();
+    uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          now.time_since_epoch())
+                          .count();
     
-    for (auto& [flow_id, config] : flows_) {
+    for (auto& [flow_id, config_ptr] : flows_) {
+        FlowConfigInternal& config = *config_ptr;
         if (!config.active.load(std::memory_order_relaxed)) {
             continue;
         }
         
         // Check if flow expired
-        if (is_flow_expired(flow_id)) {
+        if (is_flow_expired_locked(config, now_ns)) {
             config.active.store(false, std::memory_order_relaxed);
             continue;
         }
@@ -171,7 +200,7 @@ void FlowScheduler::update_flow_stats(uint32_t flow_id, uint64_t packets, uint64
     }
 }
 
-FlowConfigInternal* FlowScheduler::get_flow(uint32_t flow_id) {
+std::shared_ptr<FlowConfigInternal> FlowScheduler::get_flow(uint32_t flow_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     auto it = flows_.find(flow_id);
@@ -179,7 +208,7 @@ FlowConfigInternal* FlowScheduler::get_flow(uint32_t flow_id) {
         return nullptr;
     }
     
-    return &it->second;
+    return it->second;
 }
 
 std::vector<uint32_t> FlowScheduler::get_active_flows() const {
@@ -188,7 +217,7 @@ std::vector<uint32_t> FlowScheduler::get_active_flows() const {
     std::vector<uint32_t> active_flows;
     
     for (const auto& [flow_id, config] : flows_) {
-        if (config.active.load(std::memory_order_relaxed)) {
+        if (config->active.load(std::memory_order_relaxed)) {
             active_flows.push_back(flow_id);
         }
     }
@@ -198,7 +227,28 @@ std::vector<uint32_t> FlowScheduler::get_active_flows() const {
 
 std::unordered_map<uint32_t, FlowConfigInternal> FlowScheduler::get_all_flows_snapshot() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return flows_;
+    std::unordered_map<uint32_t, FlowConfigInternal> copy;
+    for (const auto& [id, cfg_ptr] : flows_) {
+        FlowConfigInternal snap;
+        snap.flow_id = cfg_ptr->flow_id;
+        snap.flow_key = cfg_ptr->flow_key;
+        snap.packet_size = cfg_ptr->packet_size;
+        snap.protocol = cfg_ptr->protocol;
+        snap.pps = cfg_ptr->pps;
+        snap.duration_seconds = cfg_ptr->duration_seconds;
+        snap.stateless = cfg_ptr->stateless;
+        snap.template_packet = cfg_ptr->template_packet;
+        snap.packets_sent.store(cfg_ptr->packets_sent.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+        snap.bytes_sent.store(cfg_ptr->bytes_sent.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+        snap.start_time_ns.store(cfg_ptr->start_time_ns.load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+        snap.active.store(cfg_ptr->active.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+        copy.emplace(id, std::move(snap));
+    }
+    return copy;
 }
 
 void FlowScheduler::handle_tcp_rx(const FlowKey& key,
@@ -216,7 +266,7 @@ void FlowScheduler::handle_tcp_rx(const FlowKey& key,
         return;
     }
 
-    FlowConfigInternal& flow = it_flow->second;
+    FlowConfigInternal& flow = *it_flow->second;
     if (flow.stateless || flow.protocol != "tcp" ||
         !flow.tcp_state || !flow.tcp_state_machine) {
         return;
@@ -258,25 +308,29 @@ bool FlowScheduler::is_flow_expired(uint32_t flow_id) const {
         return true;
     }
     
-    const auto& config = it->second;
-    
+    auto now = std::chrono::steady_clock::now();
+    uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          now.time_since_epoch())
+                          .count();
+
+    return is_flow_expired_locked(*it->second, now_ns);
+}
+
+bool FlowScheduler::is_flow_expired_locked(const FlowConfigInternal& config,
+                                           uint64_t now_ns) const {
     // If duration is 0, flow never expires
     if (config.duration_seconds == 0) {
         return false;
     }
-    
+
     uint64_t start_time = config.start_time_ns.load(std::memory_order_relaxed);
     if (start_time == 0) {
         return false;  // Not started yet
     }
-    
-    auto now = std::chrono::steady_clock::now();
-    auto duration = now.time_since_epoch();
-    uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
-    
+
     uint64_t elapsed_ns = now_ns - start_time;
     uint64_t duration_ns = static_cast<uint64_t>(config.duration_seconds) * 1000000000ULL;
-    
+
     return elapsed_ns >= duration_ns;
 }
 
@@ -291,7 +345,12 @@ size_t FlowScheduler::get_flow_count() const {
 }
 
 bool FlowScheduler::should_flow_be_active(const FlowConfigInternal& config) const {
-    return config.active.load(std::memory_order_relaxed) && !is_flow_expired(config.flow_id);
+    auto now = std::chrono::steady_clock::now();
+    uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          now.time_since_epoch())
+                          .count();
+    return config.active.load(std::memory_order_relaxed) &&
+           !is_flow_expired_locked(config, now_ns);
 }
 
 } // namespace trafficgen

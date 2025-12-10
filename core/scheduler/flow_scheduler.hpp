@@ -66,8 +66,8 @@ public:
     // Update flow statistics
     void update_flow_stats(uint32_t flow_id, uint64_t packets, uint64_t bytes);
     
-    // Get flow configuration
-    FlowConfigInternal* get_flow(uint32_t flow_id);
+    // Get flow configuration (shared ownership to avoid dangling)
+    std::shared_ptr<FlowConfigInternal> get_flow(uint32_t flow_id);
     
     // Get all active flows
     std::vector<uint32_t> get_active_flows() const;
@@ -90,7 +90,7 @@ public:
     size_t get_flow_count() const;
 
 private:
-    std::unordered_map<uint32_t, FlowConfigInternal> flows_;
+    std::unordered_map<uint32_t, std::shared_ptr<FlowConfigInternal>> flows_;
     // Optional mapping from 5‑tuple to flow ID for RX path lookups.
     std::unordered_map<FlowKey, uint32_t, FlowKey::Hash> flow_lookup_;
     mutable std::mutex mutex_;
@@ -98,6 +98,10 @@ private:
     
     // Check if flow should be active
     bool should_flow_be_active(const FlowConfigInternal& config) const;
+
+    // Helper to check expiration while lock is already held
+    bool is_flow_expired_locked(const FlowConfigInternal& config,
+                                uint64_t now_ns) const;
 };
 
 } // namespace trafficgen

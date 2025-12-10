@@ -157,14 +157,14 @@ double MetricsCollector::calculate_current_pps(uint32_t core_id) const {
     
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now - it->second.second).count();
+        now - it->second.timestamp).count();
     
     if (elapsed <= 0) {
         return 0.0;
     }
     
     uint64_t current_packets = per_core_stats_[core_id].tx_packets.load(std::memory_order_relaxed);
-    uint64_t delta_packets = current_packets - it->second.first;
+    uint64_t delta_packets = current_packets - it->second.packets;
     
     double elapsed_seconds = elapsed / 1000.0;
     return delta_packets / elapsed_seconds;
@@ -185,17 +185,17 @@ double MetricsCollector::calculate_current_bps(uint32_t core_id) const {
     
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now - it->second.second).count();
+        now - it->second.timestamp).count();
     
     if (elapsed <= 0) {
         return 0.0;
     }
     
-    // For BPS, we need bytes snapshot - simplified version
     uint64_t current_bytes = per_core_stats_[core_id].tx_bytes.load(std::memory_order_relaxed);
+    uint64_t delta_bytes = current_bytes - it->second.bytes;
     
     double elapsed_seconds = elapsed / 1000.0;
-    return (current_bytes * 8.0) / elapsed_seconds;  // Bits per second
+    return (delta_bytes * 8.0) / elapsed_seconds;  // Bits per second
 }
 
 double MetricsCollector::calculate_global_pps() const {
@@ -293,18 +293,19 @@ void MetricsCollector::update_snapshot(uint32_t core_id) const {
     auto now = std::chrono::steady_clock::now();
     auto it = last_snapshot_.find(core_id);
     
+    uint64_t current_packets = per_core_stats_[core_id].tx_packets.load(std::memory_order_relaxed);
+    uint64_t current_bytes = per_core_stats_[core_id].tx_bytes.load(std::memory_order_relaxed);
+
     if (it == last_snapshot_.end()) {
         // First snapshot
-        uint64_t current_packets = per_core_stats_[core_id].tx_packets.load(std::memory_order_relaxed);
-        last_snapshot_[core_id] = {current_packets, now};
+        last_snapshot_[core_id] = {current_packets, current_bytes, now};
     } else {
         // Update snapshot every second
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-            now - it->second.second).count();
+            now - it->second.timestamp).count();
         
         if (elapsed >= 1) {
-            uint64_t current_packets = per_core_stats_[core_id].tx_packets.load(std::memory_order_relaxed);
-            last_snapshot_[core_id] = {current_packets, now};
+            last_snapshot_[core_id] = {current_packets, current_bytes, now};
         }
     }
 }

@@ -95,8 +95,14 @@ private:
     double total_latency_us_{0.0};
     uint64_t latency_samples_{0};
     
+    struct RateSnapshot {
+        uint64_t packets;
+        uint64_t bytes;
+        std::chrono::steady_clock::time_point timestamp;
+    };
+
     // Last snapshot for rate calculations
-    mutable std::map<uint32_t, std::pair<uint64_t, std::chrono::steady_clock::time_point>> last_snapshot_;
+    mutable std::map<uint32_t, RateSnapshot> last_snapshot_;
     mutable std::mutex snapshot_mutex_;
     
     // Update snapshot for rate calculation
