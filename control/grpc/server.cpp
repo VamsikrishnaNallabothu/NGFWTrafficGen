@@ -35,7 +35,7 @@ grpc::Status TrafficGeneratorServiceImpl::ConfigureIMIX(
     }
     
     // Convert proto entries to internal format
-    std::vector<IMIXEntry> entries;
+    std::vector<IMIXEntryInternal> entries;
     for (const auto& entry : request->entries()) {
         entries.push_back(convert_proto_imix_entry(entry));
     }
@@ -73,8 +73,8 @@ grpc::Status TrafficGeneratorServiceImpl::ConfigureFlows(
     std::string error_message;
     
     for (const auto& proto_flow : request->flows()) {
-        // Use internal FlowConfig struct (not proto message)
-        struct ::trafficgen::FlowConfig internal_config;
+        // Use internal FlowConfigInternal struct (not proto message)
+        FlowConfigInternal internal_config;
         internal_config.flow_id = proto_flow.flow_id();
         internal_config.flow_key = convert_proto_flow_key(proto_flow);
         internal_config.packet_size = proto_flow.packet_size();
@@ -245,7 +245,7 @@ grpc::Status TrafficGeneratorServiceImpl::GetStats(
     if (request->detailed() && flow_scheduler_) {
         auto flows = flow_scheduler_->get_all_flows_snapshot();
         for (const auto& kv : flows) {
-            const ::trafficgen::FlowConfig& cfg = kv.second;
+            const FlowConfigInternal& cfg = kv.second;
             FlowStats& fs = (*response->mutable_flow_stats())[cfg.flow_id];
             fs.set_flow_id(cfg.flow_id);
             uint64_t pkts = cfg.packets_sent.load(std::memory_order_relaxed);
@@ -287,8 +287,8 @@ FlowKey TrafficGeneratorServiceImpl::convert_proto_flow_key(const Flow& flow) {
     return key;
 }
 
-IMIXEntry TrafficGeneratorServiceImpl::convert_proto_imix_entry(const IMIXEntry& entry) {
-    IMIXEntry imix_entry;
+IMIXEntryInternal TrafficGeneratorServiceImpl::convert_proto_imix_entry(const IMIXEntry& entry) {
+    IMIXEntryInternal imix_entry;
     imix_entry.packet_size = entry.packet_size();
     imix_entry.percentage = entry.percentage();
     imix_entry.protocol = entry.protocol();

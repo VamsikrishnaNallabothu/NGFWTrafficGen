@@ -14,10 +14,10 @@ bool FlowScheduler::initialize() {
     return true;
 }
 
-bool FlowScheduler::add_flow(const FlowConfig& config) {
+bool FlowScheduler::add_flow(const FlowConfigInternal& config) {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    FlowConfig new_config = config;
+    FlowConfigInternal new_config = config;
     
     // Build packet template if not already built
     if (new_config.template_packet.data.empty()) {
@@ -56,7 +56,7 @@ bool FlowScheduler::add_flow(const FlowConfig& config) {
     flows_[config.flow_id] = std::move(new_config);
 
     // Update lookup table for RX path (both directions)
-    const FlowConfig& stored = flows_[config.flow_id];
+    const FlowConfigInternal& stored = flows_[config.flow_id];
     flow_lookup_[stored.flow_key] = config.flow_id;
     // Reverse key for inbound packets
     FlowKey reverse_key = stored.flow_key;
@@ -171,7 +171,7 @@ void FlowScheduler::update_flow_stats(uint32_t flow_id, uint64_t packets, uint64
     }
 }
 
-FlowConfig* FlowScheduler::get_flow(uint32_t flow_id) {
+FlowConfigInternal* FlowScheduler::get_flow(uint32_t flow_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     auto it = flows_.find(flow_id);
@@ -196,7 +196,7 @@ std::vector<uint32_t> FlowScheduler::get_active_flows() const {
     return active_flows;
 }
 
-std::unordered_map<uint32_t, FlowConfig> FlowScheduler::get_all_flows_snapshot() const {
+std::unordered_map<uint32_t, FlowConfigInternal> FlowScheduler::get_all_flows_snapshot() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return flows_;
 }
@@ -216,7 +216,7 @@ void FlowScheduler::handle_tcp_rx(const FlowKey& key,
         return;
     }
 
-    FlowConfig& flow = it_flow->second;
+    FlowConfigInternal& flow = it_flow->second;
     if (flow.stateless || flow.protocol != "tcp" ||
         !flow.tcp_state || !flow.tcp_state_machine) {
         return;
@@ -290,7 +290,7 @@ size_t FlowScheduler::get_flow_count() const {
     return flows_.size();
 }
 
-bool FlowScheduler::should_flow_be_active(const FlowConfig& config) const {
+bool FlowScheduler::should_flow_be_active(const FlowConfigInternal& config) const {
     return config.active.load(std::memory_order_relaxed) && !is_flow_expired(config.flow_id);
 }
 

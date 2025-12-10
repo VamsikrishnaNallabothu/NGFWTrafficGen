@@ -17,11 +17,7 @@
 #include "control/grpc/server.hpp"
 #include "util/config/config_parser.hpp"
 
-// 'trafficgen' is a namespace defined throughout the traffic generator project.
-// Its main definition and usage are found in headers and implementation files
-// such as 'control/grpc/server.hpp', 'core/scheduler/flow_scheduler.hpp', and related files.
-// It contains the main classes, types, and logic for the DPDK-based traffic generator and its gRPC server/API.
-// By writing 'using namespace trafficgen;', all symbols inside this namespace can be used directly in this file.
+using namespace trafficgen;
 
 // Global variables for cleanup
 std::atomic<bool> g_running{true};

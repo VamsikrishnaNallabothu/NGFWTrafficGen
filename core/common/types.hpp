@@ -48,8 +48,9 @@ struct PacketTemplate {
     FlowKey flow_key;
 };
 
-// IMIX entry
-struct IMIXEntry {
+// IMIX entry (internal representation - proto generates IMIXEntry class)
+// Use IMIXEntryInternal to avoid conflicts with proto-generated IMIXEntry
+struct IMIXEntryInternal {
     uint32_t packet_size;
     double percentage;  // 0.0 - 100.0
     std::string protocol;  // "tcp", "udp", "icmp"

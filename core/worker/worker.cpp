@@ -251,7 +251,7 @@ void Worker::process_flows() {
             break;
         }
         
-        FlowConfig* flow = config_.flow_scheduler->get_flow(flow_id);
+        FlowConfigInternal* flow = config_.flow_scheduler->get_flow(flow_id);
         if (flow == nullptr || !flow->active.load(std::memory_order_relaxed)) {
             continue;
         }

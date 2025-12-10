@@ -11,7 +11,7 @@ IMIXEngine::IMIXEngine() : target_pps_(0), configured_(false), rng_(std::time(nu
 IMIXEngine::~IMIXEngine() {
 }
 
-bool IMIXEngine::configure(const std::vector<IMIXEntry>& entries, uint64_t target_pps) {
+bool IMIXEngine::configure(const std::vector<IMIXEntryInternal>& entries, uint64_t target_pps) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!validate_entries(entries)) {
@@ -59,7 +59,7 @@ bool IMIXEngine::is_configured() const {
     return configured_;
 }
 
-std::vector<IMIXEntry> IMIXEngine::get_entries() const {
+std::vector<IMIXEntryInternal> IMIXEngine::get_entries() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return entries_;
 }
@@ -86,7 +86,7 @@ void IMIXEngine::build_distribution() {
     size_distribution_ = std::discrete_distribution<size_t>(weights.begin(), weights.end());
 }
 
-bool IMIXEngine::validate_entries(const std::vector<IMIXEntry>& entries) {
+bool IMIXEngine::validate_entries(const std::vector<IMIXEntryInternal>& entries) {
     if (entries.empty()) {
         return false;
     }

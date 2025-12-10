@@ -13,8 +13,8 @@
 
 namespace trafficgen {
 
-// Flow configuration
-struct FlowConfig {
+// Flow configuration (internal representation, proto has same name)
+struct FlowConfigInternal {
     uint32_t flow_id;
     FlowKey flow_key;
     uint32_t packet_size;
@@ -34,6 +34,8 @@ struct FlowConfig {
     std::atomic<bool> active{false};
 };
 
+// Note: Proto generates FlowConfig class - use FlowConfigInternal internally
+
 /**
  * Flow scheduler for managing multiple traffic flows
  * Supports both stateless and stateful (TCP) flows
@@ -47,7 +49,7 @@ public:
     bool initialize();
     
     // Add flow configuration
-    bool add_flow(const FlowConfig& config);
+    bool add_flow(const FlowConfigInternal& config);
     
     // Remove flow
     bool remove_flow(uint32_t flow_id);
@@ -65,13 +67,13 @@ public:
     void update_flow_stats(uint32_t flow_id, uint64_t packets, uint64_t bytes);
     
     // Get flow configuration
-    FlowConfig* get_flow(uint32_t flow_id);
+    FlowConfigInternal* get_flow(uint32_t flow_id);
     
     // Get all active flows
     std::vector<uint32_t> get_active_flows() const;
     
-    // Get snapshot of per-flow statistics (flow_id -> FlowConfig copy)
-    std::unordered_map<uint32_t, FlowConfig> get_all_flows_snapshot() const;
+    // Get snapshot of per-flow statistics (flow_id -> FlowConfigInternal copy)
+    std::unordered_map<uint32_t, FlowConfigInternal> get_all_flows_snapshot() const;
 
     // Handle an incoming TCP packet (RX path) for stateful flows.
     void handle_tcp_rx(const FlowKey& key,
@@ -88,14 +90,14 @@ public:
     size_t get_flow_count() const;
 
 private:
-    std::unordered_map<uint32_t, FlowConfig> flows_;
+    std::unordered_map<uint32_t, FlowConfigInternal> flows_;
     // Optional mapping from 5‑tuple to flow ID for RX path lookups.
     std::unordered_map<FlowKey, uint32_t, FlowKey::Hash> flow_lookup_;
     mutable std::mutex mutex_;
     PacketBuilder packet_builder_;
     
     // Check if flow should be active
-    bool should_flow_be_active(const FlowConfig& config) const;
+    bool should_flow_be_active(const FlowConfigInternal& config) const;
 };
 
 } // namespace trafficgen

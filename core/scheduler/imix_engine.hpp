@@ -20,7 +20,7 @@ public:
     ~IMIXEngine();
     
     // Configure IMIX profile
-    bool configure(const std::vector<IMIXEntry>& entries, uint64_t target_pps);
+    bool configure(const std::vector<IMIXEntryInternal>& entries, uint64_t target_pps);
     
     // Select next packet size based on IMIX distribution
     uint32_t select_next_packet_size();
@@ -35,13 +35,13 @@ public:
     bool is_configured() const;
     
     // Get all IMIX entries
-    std::vector<IMIXEntry> get_entries() const;
+    std::vector<IMIXEntryInternal> get_entries() const;
     
     // Reset engine
     void reset();
 
 private:
-    std::vector<IMIXEntry> entries_;
+    std::vector<IMIXEntryInternal> entries_;
     uint64_t target_pps_;
     bool configured_;
     mutable std::mutex mutex_;
@@ -53,7 +53,7 @@ private:
     void build_distribution();
     
     // Validate IMIX entries
-    bool validate_entries(const std::vector<IMIXEntry>& entries);
+    bool validate_entries(const std::vector<IMIXEntryInternal>& entries);
 };
 
 } // namespace trafficgen
