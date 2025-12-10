@@ -98,9 +98,8 @@ private:
     std::unique_ptr<grpc::Server> server_;
     std::unique_ptr<TrafficGeneratorServiceImpl> service_;
     std::string server_address_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     bool running_;
 };
 
 } // namespace trafficgen
-
