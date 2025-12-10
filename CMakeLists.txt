@@ -71,6 +71,7 @@ set(PROTO_SRCS "${PROTO_OUT_DIR}/traffic_generator.pb.cc")
 set(GRPC_SRCS "${PROTO_OUT_DIR}/traffic_generator.grpc.pb.cc")
 # --- End of Code Generation ---
 
+
 # Source files
 set(CORE_SOURCES
     core/mempools/mempool_manager.cpp
@@ -83,12 +84,10 @@ set(CORE_SOURCES
     core/stats/metrics_collector.cpp
     core/worker/worker.cpp
 )
-
 set(CONTROL_SOURCES
     control/grpc/server.cpp
     util/config/config_parser.cpp
 )
-
 set(SOURCES
     main.cpp
     ${CORE_SOURCES}
@@ -115,27 +114,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${NUMA_LIBRARY} # Use the library from the manual find
     grpc++
     Threads::Threads
-    pthread
     dl
 )
 
 # Compiler flags
 target_compile_options(${PROJECT_NAME} PRIVATE
-    -march=native
-    -O3
-    -Wall
-    -Wextra
-    -Wno-deprecated-declarations
-)
-
-# DPDK specific flags
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    RTE_MACHINE_CPUFLAG_SSE
-    RTE_MACHINE_CPUFLAG_SSE2
-    RTE_MACHINE_CPUFLAG_SSE3
-    RTE_MACHINE_CPUFLAG_SSSE3
-    RTE_MACHINE_CPUFLAG_SSE4_1
-    RTE_MACHINE_CPUFLAG_SSE4_2
+    -march=native -O3 -Wall -Wextra -Wno-deprecated-declarations
 )
 
 # Install target
