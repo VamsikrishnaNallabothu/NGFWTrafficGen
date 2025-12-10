@@ -3,6 +3,7 @@
 #include <rte_eal.h>
 #include <rte_launch.h>
 #include <rte_lcore.h>
+#include <rte_mbuf_dyn.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <algorithm>
@@ -10,6 +11,10 @@
 #include <chrono>
 
 namespace trafficgen {
+
+// Helper macro to get timestamp field
+#define TIMESTAMP_DYNFIELD(mbuf) \
+    RTE_MBUF_DYNFIELD((mbuf), config_.timestamp_dynfield_offset, uint64_t*)
 
 Worker::Worker(const Config& config) : config_(config) {
 }
@@ -166,13 +171,16 @@ void Worker::process_received_packets(rte_mbuf** mbufs, uint16_t count) {
 
         total_bytes += rte_pktmbuf_pkt_len(mbuf);
 
-        // Latency measurement (if udata carries TX timestamp)
-        if (config_.metrics_collector && mbuf->udata != nullptr) {
-            uint64_t sent_ns = reinterpret_cast<uint64_t>(mbuf->udata);
-            if (sent_ns != 0 && now_ns > sent_ns) {
-                uint64_t delta_ns = now_ns - sent_ns;
-                config_.metrics_collector->record_latency(
-                    config_.core_id, delta_ns);
+        // Latency measurement
+        if (config_.metrics_collector && config_.timestamp_dynfield_offset != -1) {
+            uint64_t* ts_ptr = TIMESTAMP_DYNFIELD(mbuf);
+            if (ts_ptr != nullptr) {
+                uint64_t sent_ns = *ts_ptr;
+                if (sent_ns != 0 && now_ns > sent_ns) {
+                    uint64_t delta_ns = now_ns - sent_ns;
+                    config_.metrics_collector->record_latency(
+                        config_.core_id, delta_ns);
+                }
             }
         }
 
@@ -294,11 +302,15 @@ void Worker::process_flows() {
                 mutator.recalculate_tcp_checksum(ip_hdr, tcp_hdr);
             }
 
-            // Stamp TX timestamp for latency measurement (store in udata pointer)
-            uint64_t tx_timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                        std::chrono::steady_clock::now().time_since_epoch())
-                                        .count();
-            mbuf->udata = reinterpret_cast<void*>(tx_timestamp);
+            // Stamp TX timestamp for latency measurement
+            if (config_.timestamp_dynfield_offset != -1) {
+                uint64_t* ts_ptr = TIMESTAMP_DYNFIELD(mbuf);
+                if (ts_ptr != nullptr) {
+                    *ts_ptr = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                  std::chrono::steady_clock::now().time_since_epoch())
+                                  .count();
+                }
+            }
 
             mbuf_count++;
 
@@ -359,4 +371,3 @@ void Worker::set_cpu_affinity() {
 }
 
 } // namespace trafficgen
-
