@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package trafficgen;
+
+// Control plane service for DPDK traffic generator
+service TrafficGeneratorService {
+  // Configure IMIX (Internet Mix) traffic profile
+  rpc ConfigureIMIX(IMIXConfig) returns (StatusResponse);
+  
+  // Configure traffic flows
+  rpc ConfigureFlows(FlowConfig) returns (StatusResponse);
+  
+  // Start traffic generation
+  rpc StartTraffic(StartRequest) returns (StatusResponse);
+  
+  // Stop traffic generation
+  rpc StopTraffic(StopRequest) returns (StatusResponse);
+  
+  // Get real-time metrics
+  rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
+  
+  // Get detailed statistics
+  rpc GetStats(StatsRequest) returns (StatsResponse);
+}
+
+// IMIX (Internet Mix) configuration
+message IMIXConfig {
+  repeated IMIXEntry entries = 1;
+  uint32 duration_seconds = 2;  // 0 means infinite
+  uint32 target_pps = 3;        // Target packets per second
+}
+
+message IMIXEntry {
+  uint32 packet_size = 1;       // Bytes
+  double percentage = 2;        // 0.0 - 100.0
+  string protocol = 3;          // "tcp", "udp", "icmp"
+  bool enable_checksum = 4;
+}
+
+// Flow configuration
+message FlowConfig {
+  repeated Flow flows = 1;
+  bool stateless = 2;           // true for stateless, false for stateful (TCP)
+}
+
+message Flow {
+  uint32 flow_id = 1;
+  string src_ip = 2;
+  string dst_ip = 3;
+  uint32 src_port = 4;
+  uint32 dst_port = 5;
+  string protocol = 6;          // "tcp", "udp", "icmp"
+  uint32 packet_size = 7;
+  uint32 pps = 8;               // Packets per second for this flow
+  uint32 duration_seconds = 9;  // 0 means infinite
+}
+
+// Start request
+message StartRequest {
+  bool reset_stats = 1;         // Reset statistics before starting
+}
+
+// Stop request
+message StopRequest {
+  bool drain_queues = 1;        // Wait for queues to drain
+  uint32 timeout_seconds = 2;   // Timeout for draining
+}
+
+// Status response
+message StatusResponse {
+  bool success = 1;
+  string message = 2;
+  int32 error_code = 3;
+}
+
+// Metrics request
+message MetricsRequest {
+  bool include_per_core = 1;
+  bool include_latency_histogram = 2;
+}
+
+// Metrics response
+message MetricsResponse {
+  GlobalMetrics global = 1;
+  repeated CoreMetrics per_core = 2;
+  LatencyHistogram latency = 3;
+}
+
+message GlobalMetrics {
+  uint64 total_tx_packets = 1;
+  uint64 total_rx_packets = 2;
+  uint64 total_tx_bytes = 3;
+  uint64 total_rx_bytes = 4;
+  double current_pps = 5;
+  double current_bps = 6;
+  double avg_latency_us = 7;
+  uint64 errors = 8;
+}
+
+message CoreMetrics {
+  uint32 core_id = 1;
+  uint64 tx_packets = 2;
+  uint64 rx_packets = 3;
+  uint64 tx_bytes = 4;
+  uint64 rx_bytes = 5;
+  double pps = 6;
+}
+
+message LatencyHistogram {
+  repeated LatencyBucket buckets = 1;
+}
+
+message LatencyBucket {
+  uint32 min_us = 1;
+  uint32 max_us = 2;
+  uint64 count = 3;
+}
+
+// Statistics request
+message StatsRequest {
+  bool detailed = 1;
+}
+
+// Statistics response
+message StatsResponse {
+  GlobalMetrics metrics = 1;
+  map<uint32, FlowStats> flow_stats = 2;  // flow_id -> stats
+  uint64 uptime_seconds = 3;
+}
+
+message FlowStats {
+  uint32 flow_id = 1;
+  uint64 tx_packets = 2;
+  uint64 tx_bytes = 3;
+  double avg_pps = 4;
+}
+
