@@ -8,6 +8,7 @@
 #include <rte_ethdev.h>
 #include <rte_mempool.h>
 #include <rte_lcore.h>
+#include <rte_mbuf_dyn.h>
 
 #include "core/mempools/mempool_manager.hpp"
 #include "core/scheduler/flow_scheduler.hpp"
@@ -27,6 +28,7 @@ std::shared_ptr<MempoolManager> g_mempool_manager;
 std::shared_ptr<FlowScheduler> g_flow_scheduler;
 std::shared_ptr<IMIXEngine> g_imix_engine;
 std::shared_ptr<MetricsCollector> g_metrics_collector;
+int g_timestamp_dynfield_offset = -1;
 
 // Signal handler for graceful shutdown
 void signal_handler(int signum) {
@@ -67,6 +69,23 @@ bool initialize_dpdk(int argc, char* argv[]) {
     int lcore_count = rte_lcore_count();
     std::cout << "DPDK initialized successfully. Available cores: " << lcore_count << "\n";
     
+    return true;
+}
+
+// Register timestamp dynamic field
+bool register_timestamp_dynfield() {
+    struct rte_mbuf_dynfield dynfield_desc = {
+        "timestamp_dynfield",
+        sizeof(uint64_t),
+        __alignof__(uint64_t),
+        0
+    };
+
+    g_timestamp_dynfield_offset = rte_mbuf_dynfield_register(&dynfield_desc);
+    if (g_timestamp_dynfield_offset < 0) {
+        std::cerr << "Error: Cannot register mbuf dynfield for timestamp\n";
+        return false;
+    }
     return true;
 }
 
@@ -182,7 +201,8 @@ bool launch_workers(const AppConfig& config) {
         worker_config.flow_scheduler = g_flow_scheduler;
         worker_config.imix_engine = g_imix_engine;
         worker_config.metrics_collector = g_metrics_collector;
-        
+        worker_config.timestamp_dynfield_offset = g_timestamp_dynfield_offset;
+
         auto worker = std::make_unique<Worker>(worker_config);
         if (!worker->start()) {
             std::cerr << "Error: Failed to start worker on core " << mapping.core_id << "\n";
@@ -236,6 +256,11 @@ int main(int argc, char* argv[]) {
     
     // Initialize DPDK EAL
     if (!initialize_dpdk(argc, argv)) {
+        return 1;
+    }
+
+    // Register timestamp dynamic field
+    if (!register_timestamp_dynfield()) {
         return 1;
     }
     
@@ -353,4 +378,3 @@ int main(int argc, char* argv[]) {
     
     return 0;
 }
-
