@@ -109,8 +109,8 @@ Before full deployment:
 
 ### Known Limitations
 
-1. Some error handling paths are still conservative and may abort configuration on minor issues
-2. Retransmission and full TCP congestion control are not implemented (stateful TCP is simplified)
+1. Some error handling paths are still conservative and may abort configuration on minor issues.
+2. Advanced TCP behaviors (retransmission, congestion control/window scaling) are not implemented; stateful TCP is intentionally simplified.
 
 ### Future Improvements
 

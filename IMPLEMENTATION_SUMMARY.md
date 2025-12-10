@@ -132,8 +132,8 @@ This document summarizes the complete implementation of the DPDK-based C++ Traff
 
 ## Known Limitations
 
-1. **TCP Features**: Retransmissions, congestion control, and full TCP window management are not implemented (stateful TCP is simplified for traffic generation)
-2. **Error Recovery**: Could be more robust in some edge cases
+1. **Advanced TCP Features**: Retransmissions, congestion control, and full TCP window management are not implemented (stateful TCP is intentionally simplified for traffic generation).
+2. **Error Recovery**: Some edge cases could use more robust handling and logging.
 
 ## Compilation Notes
 
@@ -159,13 +159,12 @@ This document summarizes the complete implementation of the DPDK-based C++ Traff
 
 ## Next Steps
 
-1. Implement proper JSON config parser (jsoncpp)
-2. Complete TCP state machine for stateful flows
-3. Implement latency histogram collection
-4. Add comprehensive unit tests
-5. Performance tuning and optimization
-6. Add Prometheus metrics export
-7. Create deployment scripts
+1. Add advanced TCP behaviors (retransmission, congestion control, window scaling).
+2. Improve error handling/logging coverage.
+3. Add comprehensive unit/integration tests.
+4. Performance tuning and optimization.
+5. Add Prometheus metrics export.
+6. Create deployment/packaging scripts.
 
 ## File Structure
 
@@ -216,7 +215,7 @@ NGFW/
 
 ## Summary
 
-The implementation is **complete** and follows the design document specifications. All major components are implemented with proper error handling, thread safety, and performance considerations. The code is ready for compilation, though some components (like JSON parser) are placeholders that need proper library integration.
+The implementation follows the design document: stateful TCP flows, JSON config parsing, latency histogram, and metrics are implemented. Remaining gaps are limited to advanced TCP behaviors and additional hardening/testing.
 
-**Status**: ✅ Ready for compilation and testing
+**Status**: ✅ Ready for compilation and testing (with advanced TCP features planned)
 
