@@ -1,29 +1,164 @@
-[ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/main.cpp.o
-/home/ubuntu/NGFWTrafficGen/main.cpp: In function ‘int main(int, char**)’:
-/home/ubuntu/NGFWTrafficGen/main.cpp:211:9: warning: variable ‘log_level’ set but not used [-Wunused-but-set-variable]
-  211 |     int log_level = 7;
-      |         ^~~~~~~~~
 [ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/core/packet/packet_builder.cpp.o
-/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp: In member function ‘void trafficgen::PacketBuilder::build_ethernet_header(rte_ether_hdr*, const std::string&, const std::string&, uint16_t)’:
-/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:111:36: error: ‘struct rte_ether_hdr’ has no member named ‘d_addr’; did you mean ‘dst_addr’?
-  111 |     mac_to_bytes(dst_mac, eth_hdr->d_addr.addr_bytes);
-      |                                    ^~~~~~
-      |                                    dst_addr
-/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:112:36: error: ‘struct rte_ether_hdr’ has no member named ‘s_addr’; did you mean ‘dst_addr’?
-  112 |     mac_to_bytes(src_mac, eth_hdr->s_addr.addr_bytes);
-      |                                    ^~~~~~
-      |                                    dst_addr
 /home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp: In member function ‘uint16_t trafficgen::PacketBuilder::calculate_ip_checksum(const rte_ipv4_hdr*)’:
-/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:177:69: warning: converting a packed ‘const rte_ipv4_hdr’ pointer (alignment 1) to a ‘const uint16_t’ {aka ‘const short unsigned int’} pointer (alignment 2) may result in an unaligned pointer value [-Waddress-of-packed-member]
-  177 |     const uint16_t* words = reinterpret_cast<const uint16_t*>(ip_hdr);
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:178:69: warning: converting a packed ‘const rte_ipv4_hdr’ pointer (alignment 1) to a ‘const uint16_t’ {aka ‘const short unsigned int’} pointer (alignment 2) may result in an unaligned pointer value [-Waddress-of-packed-member]
+  178 |     const uint16_t* words = reinterpret_cast<const uint16_t*>(ip_hdr);
       |                                                                     ^
 /home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp: In member function ‘uint16_t trafficgen::PacketBuilder::calculate_pseudo_header_checksum(uint32_t, uint32_t, uint8_t, uint16_t)’:
-/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:210:66: warning: converting a packed ‘trafficgen::PacketBuilder::calculate_pseudo_header_checksum(uint32_t, uint32_t, uint8_t, uint16_t)::pseudo_header’ pointer (alignment 1) to a ‘const uint16_t’ {aka ‘const short unsigned int’} pointer (alignment 2) may result in an unaligned pointer value [-Waddress-of-packed-member]
-  210 |     const uint16_t* words = reinterpret_cast<const uint16_t*>(&ph);
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:211:66: warning: converting a packed ‘trafficgen::PacketBuilder::calculate_pseudo_header_checksum(uint32_t, uint32_t, uint8_t, uint16_t)::pseudo_header’ pointer (alignment 1) to a ‘const uint16_t’ {aka ‘const short unsigned int’} pointer (alignment 2) may result in an unaligned pointer value [-Waddress-of-packed-member]
+  211 |     const uint16_t* words = reinterpret_cast<const uint16_t*>(&ph);
       |                                                                  ^
-/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:194:12: note: defined here
-  194 |     struct pseudo_header {
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:195:12: note: defined here
+  195 |     struct pseudo_header {
       |            ^~~~~~~~~~~~~
-make[2]: *** [CMakeFiles/NGFWTrafficGenerator.dir/build.make:117: CMakeFiles/NGFWTrafficGenerator.dir/core/packet/packet_builder.cpp.o] Error 1
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:214:23: warning: ‘ph’ is used uninitialized [-Wuninitialized]
+  214 |         sum += words[i];
+      |                ~~~~~~~^
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:203:19: note: ‘ph’ declared here
+  203 |     pseudo_header ph;
+      |                   ^~
+[ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/core/packet/packet_mutator.cpp.o
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_mutator.cpp: In member function ‘uint16_t trafficgen::PacketMutator::calculate_transport_checksum(const void*, size_t, const rte_ipv4_hdr*, uint8_t)’:
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_mutator.cpp:176:67: warning: pointer of type ‘void *’ used in arithmetic [-Wpointer-arith]
+  176 |         uint8_t last_byte = *reinterpret_cast<const uint8_t*>(hdr + hdr_len - 1);
+      |                                                               ~~~~^~~~~~~~~
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_mutator.cpp:176:77: warning: pointer of type ‘void *’ used in arithmetic [-Wpointer-arith]
+  176 |         uint8_t last_byte = *reinterpret_cast<const uint8_t*>(hdr + hdr_len - 1);
+      |                                                               ~~~~~~~~~~~~~~^~~
+[ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/core/stateful/tcp_state.cpp.o
+[ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/core/scheduler/imix_engine.cpp.o
+[ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/core/scheduler/token_bucket.cpp.o
+[ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/core/scheduler/flow_scheduler.cpp.o
+In file included from /usr/include/x86_64-linux-gnu/c++/13/bits/c++allocator.h:33,
+                 from /usr/include/c++/13/bits/allocator.h:46,
+                 from /usr/include/c++/13/string:43,
+                 from /home/ubuntu/NGFWTrafficGen/core/common/types.hpp:4,
+                 from /home/ubuntu/NGFWTrafficGen/core/scheduler/flow_scheduler.hpp:3,
+                 from /home/ubuntu/NGFWTrafficGen/core/scheduler/flow_scheduler.cpp:1:
+/usr/include/c++/13/bits/new_allocator.h: In instantiation of ‘void std::__new_allocator<_Tp>::construct(_Up*, _Args&& ...) [with _Up = std::pair<const unsigned int, trafficgen::FlowConfigInternal>; _Args = {const unsigned int&, trafficgen::FlowConfigInternal}; _Tp = std::__detail::_Hash_node<std::pair<const unsigned int, trafficgen::FlowConfigInternal>, false>]’:
+/usr/include/c++/13/bits/alloc_traits.h:538:17:   required from ‘static void std::allocator_traits<std::allocator<_CharT> >::construct(allocator_type&, _Up*, _Args&& ...) [with _Up = std::pair<const unsigned int, trafficgen::FlowConfigInternal>; _Args = {const unsigned int&, trafficgen::FlowConfigInternal}; _Tp = std::__detail::_Hash_node<std::pair<const unsigned int, trafficgen::FlowConfigInternal>, false>; allocator_type = std::allocator<std::__detail::_Hash_node<std::pair<const unsigned int, trafficgen::FlowConfigInternal>, false> >]’
+/usr/include/c++/13/bits/hashtable_policy.h:1995:36:   required from ‘std::__detail::_Hashtable_alloc<_NodeAlloc>::__node_type* std::__detail::_Hashtable_alloc<_NodeAlloc>::_M_allocate_node(_Args&& ...) [with _Args = {const unsigned int&, trafficgen::FlowConfigInternal}; _NodeAlloc = std::allocator<std::__detail::_Hash_node<std::pair<const unsigned int, trafficgen::FlowConfigInternal>, false> >; __node_ptr = std::allocator<std::__detail::_Hash_node<std::pair<const unsigned int, trafficgen::FlowConfigInternal>, false> >::value_type*]’
+/usr/include/c++/13/bits/hashtable.h:307:35:   required from ‘std::_Hashtable<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::_Scoped_node::_Scoped_node(std::_Hashtable<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::__hashtable_alloc*, _Args&& ...) [with _Args = {const unsigned int&, trafficgen::FlowConfigInternal}; _Key = unsigned int; _Value = std::pair<const unsigned int, trafficgen::FlowConfigInternal>; _Alloc = std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >; _ExtractKey = std::__detail::_Select1st; _Equal = std::equal_to<unsigned int>; _Hash = std::hash<unsigned int>; _RangeHash = std::__detail::_Mod_range_hashing; _Unused = std::__detail::_Default_ranged_hash; _RehashPolicy = std::__detail::_Prime_rehash_policy; _Traits = std::__detail::_Hashtable_traits<false, false, true>; std::_Hashtable<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::__hashtable_alloc = std::_Hashtable<unsigned int, std::pair<const unsigned int, trafficgen::FlowConfigInternal>, std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >, std::__detail::_Select1st, std::equal_to<unsigned int>, std::hash<unsigned int>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::__hashtable_alloc]’
+/usr/include/c++/13/bits/hashtable.h:2087:15:   required from ‘std::pair<typename std::__detail::_Insert<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::iterator, bool> std::_Hashtable<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::_M_emplace(std::true_type, _Args&& ...) [with _Args = {const unsigned int&, trafficgen::FlowConfigInternal}; _Key = unsigned int; _Value = std::pair<const unsigned int, trafficgen::FlowConfigInternal>; _Alloc = std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >; _ExtractKey = std::__detail::_Select1st; _Equal = std::equal_to<unsigned int>; _Hash = std::hash<unsigned int>; _RangeHash = std::__detail::_Mod_range_hashing; _Unused = std::__detail::_Default_ranged_hash; _RehashPolicy = std::__detail::_Prime_rehash_policy; _Traits = std::__detail::_Hashtable_traits<false, false, true>; typename std::__detail::_Insert<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::iterator = std::__detail::_Insert_base<unsigned int, std::pair<const unsigned int, trafficgen::FlowConfigInternal>, std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >, std::__detail::_Select1st, std::equal_to<unsigned int>, std::hash<unsigned int>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::iterator; typename _Traits::__constant_iterators = std::__detail::_Hashtable_traits<false, false, true>::__constant_iterators; std::true_type = std::integral_constant<bool, true>]’
+/usr/include/c++/13/bits/hashtable.h:961:21:   required from ‘std::_Hashtable<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::__ireturn_type std::_Hashtable<_Key, _Value, _Alloc, _ExtractKey, _Equal, _Hash, _RangeHash, _Unused, _RehashPolicy, _Traits>::emplace(_Args&& ...) [with _Args = {const unsigned int&, trafficgen::FlowConfigInternal}; _Key = unsigned int; _Value = std::pair<const unsigned int, trafficgen::FlowConfigInternal>; _Alloc = std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >; _ExtractKey = std::__detail::_Select1st; _Equal = std::equal_to<unsigned int>; _Hash = std::hash<unsigned int>; _RangeHash = std::__detail::_Mod_range_hashing; _Unused = std::__detail::_Default_ranged_hash; _RehashPolicy = std::__detail::_Prime_rehash_policy; _Traits = std::__detail::_Hashtable_traits<false, false, true>; __ireturn_type = std::_Hashtable<unsigned int, std::pair<const unsigned int, trafficgen::FlowConfigInternal>, std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >, std::__detail::_Select1st, std::equal_to<unsigned int>, std::hash<unsigned int>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::__ireturn_type]’
+/usr/include/c++/13/bits/unordered_map.h:396:23:   required from ‘std::pair<typename std::_Hashtable<_Key, std::pair<const _Key, _Val>, _Alloc, std::__detail::_Select1st, _Pred, _Hash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<std::__not_<std::__and_<std::__is_fast_hash<_Hash>, std::__is_nothrow_invocable<const _Hash&, const _Key&> > >::value, false, true> >::iterator, bool> std::unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::emplace(_Args&& ...) [with _Args = {const unsigned int&, trafficgen::FlowConfigInternal}; _Key = unsigned int; _Tp = trafficgen::FlowConfigInternal; _Hash = std::hash<unsigned int>; _Pred = std::equal_to<unsigned int>; _Alloc = std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >; typename std::_Hashtable<_Key, std::pair<const _Key, _Val>, _Alloc, std::__detail::_Select1st, _Pred, _Hash, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<std::__not_<std::__and_<std::__is_fast_hash<_Hash>, std::__is_nothrow_invocable<const _Hash&, const _Key&> > >::value, false, true> >::iterator = std::__detail::_Insert_base<unsigned int, std::pair<const unsigned int, trafficgen::FlowConfigInternal>, std::allocator<std::pair<const unsigned int, trafficgen::FlowConfigInternal> >, std::__detail::_Select1st, std::equal_to<unsigned int>, std::hash<unsigned int>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::iterator]’
+/home/ubuntu/NGFWTrafficGen/core/scheduler/flow_scheduler.cpp:249:21:   required from here
+/usr/include/c++/13/bits/new_allocator.h:191:11: error: no matching function for call to ‘std::pair<const unsigned int, trafficgen::FlowConfigInternal>::pair(const unsigned int&, trafficgen::FlowConfigInternal)’
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /usr/include/c++/13/bits/stl_algobase.h:64,
+                 from /usr/include/c++/13/string:51:
+/usr/include/c++/13/bits/stl_pair.h:719:28: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_MoveConstructiblePair<_U1, _U2>() && (! std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_ImplicitlyMoveConvertiblePair<_U1, _U2>())), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(std::pair<_U1, _U2>&&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_MoveConstructiblePair<_U1, _U2>() && (! std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_ImplicitlyMoveConvertiblePair<_U1, _U2>())), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  719 |         explicit constexpr pair(pair<_U1, _U2>&& __p)
+      |                            ^~~~
+/usr/include/c++/13/bits/stl_pair.h:719:28: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   mismatched types ‘std::pair<_T1, _T2>’ and ‘const unsigned int’
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/13/bits/stl_pair.h:708:19: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_MoveConstructiblePair<_U1, _U2>() && std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_ImplicitlyMoveConvertiblePair<_U1, _U2>()), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(std::pair<_U1, _U2>&&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_MoveConstructiblePair<_U1, _U2>() && std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_ImplicitlyMoveConvertiblePair<_U1, _U2>()), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  708 |         constexpr pair(pair<_U1, _U2>&& __p)
+      |                   ^~~~
+/usr/include/c++/13/bits/stl_pair.h:708:19: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   mismatched types ‘std::pair<_T1, _T2>’ and ‘const unsigned int’
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/13/bits/stl_pair.h:697:28: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(_MoveConstructiblePair<_U1, _U2>() && (! _ImplicitlyMoveConvertiblePair<_U1, _U2>())), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(_U1&&, _U2&&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<true, _T1, _T2>::_MoveConstructiblePair<_U1, _U2>() && (! std::_PCC<true, _T1, _T2>::_ImplicitlyMoveConvertiblePair<_U1, _U2>())), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  697 |         explicit constexpr pair(_U1&& __x, _U2&& __y)
+      |                            ^~~~
+/usr/include/c++/13/bits/stl_pair.h:697:28: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:696:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  696 |                          bool>::type=false>
+      |                                      ^~~~~
+/usr/include/c++/13/bits/stl_pair.h:687:19: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(_MoveConstructiblePair<_U1, _U2>() && _ImplicitlyMoveConvertiblePair<_U1, _U2>()), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(_U1&&, _U2&&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<true, _T1, _T2>::_MoveConstructiblePair<_U1, _U2>() && std::_PCC<true, _T1, _T2>::_ImplicitlyMoveConvertiblePair<_U1, _U2>()), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  687 |         constexpr pair(_U1&& __x, _U2&& __y)
+      |                   ^~~~
+/usr/include/c++/13/bits/stl_pair.h:687:19: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:686:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  686 |                          bool>::type=true>
+      |                                      ^~~~
+/usr/include/c++/13/bits/stl_pair.h:675:9: note: candidate: ‘template<class _U2, typename std::enable_if<std::__and_<std::is_pointer<const unsigned int>, std::__not_<std::is_reference<_Tp> >, std::is_constructible<trafficgen::FlowConfigInternal, _U2>, std::__not_<std::is_constructible<trafficgen::FlowConfigInternal, const _U1&> >, std::__not_<std::is_convertible<_U2, trafficgen::FlowConfigInternal> > >::value, bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(__zero_as_null_pointer_constant, _U2&&, ...) [with typename std::enable_if<std::__and_<std::is_pointer<_Tp>, std::__not_<std::is_reference<_U1> >, std::is_constructible<_T2, _U2>, std::__not_<std::is_constructible<_T1, const _U1&> >, std::__not_<std::is_convertible<_U2, _T2> > >::value, bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  675 |         pair(__zero_as_null_pointer_constant, _U2&& __y, ...)
+      |         ^~~~
+/usr/include/c++/13/bits/stl_pair.h:675:9: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:672:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  672 |                              bool> = false>
+      |                                      ^~~~~
+/usr/include/c++/13/bits/stl_pair.h:662:9: note: candidate: ‘template<class _U2, typename std::enable_if<std::__and_<std::is_pointer<const unsigned int>, std::__not_<std::is_reference<_Tp> >, std::is_constructible<trafficgen::FlowConfigInternal, _U2>, std::__not_<std::is_constructible<trafficgen::FlowConfigInternal, const _U1&> >, std::is_convertible<_U2, trafficgen::FlowConfigInternal> >::value, bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(__zero_as_null_pointer_constant, _U2&&, ...) [with typename std::enable_if<std::__and_<std::is_pointer<_Tp>, std::__not_<std::is_reference<_U1> >, std::is_constructible<_T2, _U2>, std::__not_<std::is_constructible<_T1, const _U1&> >, std::is_convertible<_U2, _T2> >::value, bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  662 |         pair(__zero_as_null_pointer_constant, _U2&& __y, ...)
+      |         ^~~~
+/usr/include/c++/13/bits/stl_pair.h:662:9: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:659:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  659 |                              bool> = true>
+      |                                      ^~~~
+/usr/include/c++/13/bits/stl_pair.h:649:9: note: candidate: ‘template<class _U1, typename std::enable_if<std::__and_<std::__not_<std::is_reference<_Tp> >, std::is_pointer<trafficgen::FlowConfigInternal>, std::is_constructible<const unsigned int, _U1>, std::__not_<std::is_constructible<const unsigned int, const _U1&> >, std::__not_<std::is_convertible<_Iter, const unsigned int> > >::value, bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(_U1&&, __zero_as_null_pointer_constant, ...) [with typename std::enable_if<std::__and_<std::__not_<std::is_reference<_U1> >, std::is_pointer<_T2>, std::is_constructible<_T1, _U1>, std::__not_<std::is_constructible<_T1, const _U1&> >, std::__not_<std::is_convertible<_Iter, _Iterator> > >::value, bool>::type <anonymous> = _U1; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  649 |         pair(_U1&& __x, __zero_as_null_pointer_constant, ...)
+      |         ^~~~
+/usr/include/c++/13/bits/stl_pair.h:649:9: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:646:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  646 |                              bool> = false>
+      |                                      ^~~~~
+/usr/include/c++/13/bits/stl_pair.h:636:9: note: candidate: ‘template<class _U1, typename std::enable_if<std::__and_<std::__not_<std::is_reference<_Tp> >, std::is_pointer<trafficgen::FlowConfigInternal>, std::is_constructible<const unsigned int, _U1>, std::__not_<std::is_constructible<const unsigned int, const _U1&> >, std::is_convertible<_Iter, const unsigned int> >::value, bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(_U1&&, __zero_as_null_pointer_constant, ...) [with typename std::enable_if<std::__and_<std::__not_<std::is_reference<_U1> >, std::is_pointer<_T2>, std::is_constructible<_T1, _U1>, std::__not_<std::is_constructible<_T1, const _U1&> >, std::is_convertible<_Iter, _Iterator> >::value, bool>::type <anonymous> = _U1; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  636 |         pair(_U1&& __x, __zero_as_null_pointer_constant, ...)
+      |         ^~~~
+/usr/include/c++/13/bits/stl_pair.h:636:9: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:633:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  633 |                              bool> = true>
+      |                                      ^~~~
+/usr/include/c++/13/bits/stl_pair.h:595:28: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_ConstructiblePair<_U1, _U2>() && (! std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_ImplicitlyConvertiblePair<_U1, _U2>())), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(const std::pair<_U1, _U2>&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_ConstructiblePair<_U1, _U2>() && (! std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_ImplicitlyConvertiblePair<_U1, _U2>())), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  595 |         explicit constexpr pair(const pair<_U1, _U2>& __p)
+      |                            ^~~~
+/usr/include/c++/13/bits/stl_pair.h:595:28: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   mismatched types ‘const std::pair<_T1, _T2>’ and ‘const unsigned int’
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/13/bits/stl_pair.h:585:19: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_ConstructiblePair<_U1, _U2>() && std::_PCC<((! std::is_same<const unsigned int, _U1>::value) || (! std::is_same<trafficgen::FlowConfigInternal, _U2>::value)), const unsigned int, trafficgen::FlowConfigInternal>::_ImplicitlyConvertiblePair<_U1, _U2>()), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(const std::pair<_U1, _U2>&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_ConstructiblePair<_U1, _U2>() && std::_PCC<((! std::is_same<_T1, _U1>::value) || (! std::is_same<_T2, _U2>::value)), _T1, _T2>::_ImplicitlyConvertiblePair<_U1, _U2>()), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  585 |         constexpr pair(const pair<_U1, _U2>& __p)
+      |                   ^~~~
+/usr/include/c++/13/bits/stl_pair.h:585:19: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   mismatched types ‘const std::pair<_T1, _T2>’ and ‘const unsigned int’
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/13/bits/stl_pair.h:568:26: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(_ConstructiblePair<_U1, _U2>() && (! _ImplicitlyConvertiblePair<_U1, _U2>())), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(const _T1&, const _T2&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<true, _T1, _T2>::_ConstructiblePair<_U1, _U2>() && (! std::_PCC<true, _T1, _T2>::_ImplicitlyConvertiblePair<_U1, _U2>())), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  568 |       explicit constexpr pair(const _T1& __a, const _T2& __b)
+      |                          ^~~~
+/usr/include/c++/13/bits/stl_pair.h:568:26: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:567:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  567 |                          bool>::type=false>
+      |                                      ^~~~~
+/usr/include/c++/13/bits/stl_pair.h:558:17: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<(_ConstructiblePair<_U1, _U2>() && _ImplicitlyConvertiblePair<_U1, _U2>()), bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair(const _T1&, const _T2&) [with _U2 = _U1; typename std::enable_if<(std::_PCC<true, _T1, _T2>::_ConstructiblePair<_U1, _U2>() && std::_PCC<true, _T1, _T2>::_ImplicitlyConvertiblePair<_U1, _U2>()), bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  558 |       constexpr pair(const _T1& __a, const _T2& __b)
+      |                 ^~~~
+/usr/include/c++/13/bits/stl_pair.h:558:17: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/stl_pair.h:557:38: error: no type named ‘type’ in ‘struct std::enable_if<false, bool>’
+  557 |                          bool>::type=true>
+      |                                      ^~~~
+/usr/include/c++/13/bits/stl_pair.h:543:26: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<std::__and_<std::is_default_constructible<_U1>, std::is_default_constructible<_Dp>, std::__not_<std::__and_<std::__is_implicitly_default_constructible<_U1>, std::__is_implicitly_default_constructible<_U2> > > >::value, bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair() [with _U2 = _U1; typename std::enable_if<std::__and_<std::is_default_constructible<_U1>, std::is_default_constructible<_U2>, std::__not_<std::__and_<std::__is_implicitly_default_constructible<_U1>, std::__is_implicitly_default_constructible<_U2> > > >::value, bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  543 |       explicit constexpr pair()
+      |                          ^~~~
+/usr/include/c++/13/bits/stl_pair.h:543:26: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   candidate expects 0 arguments, 2 provided
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/13/bits/stl_pair.h:531:17: note: candidate: ‘template<class _U1, class _U2, typename std::enable_if<std::__and_<std::__is_implicitly_default_constructible<_U1>, std::__is_implicitly_default_constructible<_U2> >::value, bool>::type <anonymous> > constexpr std::pair<_T1, _T2>::pair() [with _U2 = _U1; typename std::enable_if<std::__and_<std::__is_implicitly_default_constructible<_U1>, std::__is_implicitly_default_constructible<_U2> >::value, bool>::type <anonymous> = _U2; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  531 |       constexpr pair()
+      |                 ^~~~
+/usr/include/c++/13/bits/stl_pair.h:531:17: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   candidate expects 0 arguments, 2 provided
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/13/bits/stl_pair.h:238:9: note: candidate: ‘template<class ... _Args1, long unsigned int ..._Indexes1, class ... _Args2, long unsigned int ..._Indexes2> std::pair<_T1, _T2>::pair(std::tuple<_Args1 ...>&, std::tuple<_Args2 ...>&, std::_Index_tuple<_Indexes1 ...>, std::_Index_tuple<_Indexes2 ...>) [with _Args1 = {_Args1 ...}; long unsigned int ..._Indexes1 = {_Indexes1 ...}; _Args2 = {_Args2 ...}; long unsigned int ..._Indexes2 = {_Indexes2 ...}; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  238 |         pair(tuple<_Args1...>&, tuple<_Args2...>&,
+      |         ^~~~
+/usr/include/c++/13/bits/stl_pair.h:238:9: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   mismatched types ‘std::tuple<_UTypes ...>’ and ‘const unsigned int’
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/13/bits/stl_pair.h:202:9: note: candidate: ‘template<class ... _Args1, class ... _Args2> std::pair<_T1, _T2>::pair(std::piecewise_construct_t, std::tuple<_Args1 ...>, std::tuple<_Args2 ...>) [with _Args1 = {_Args1 ...}; _Args2 = {_Args2 ...}; _T1 = const unsigned int; _T2 = trafficgen::FlowConfigInternal]’
+  202 |         pair(piecewise_construct_t, tuple<_Args1...>, tuple<_Args2...>);
+      |         ^~~~
+/usr/include/c++/13/bits/stl_pair.h:202:9: note:   template argument deduction/substitution failed:
+/usr/include/c++/13/bits/new_allocator.h:191:11: note:   ‘trafficgen::FlowConfigInternal’ is not derived from ‘std::tuple<_UTypes ...>’
+  191 |         { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+      |           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+make[2]: *** [CMakeFiles/NGFWTrafficGenerator.dir/build.make:187: CMakeFiles/NGFWTrafficGenerator.dir/core/scheduler/flow_scheduler.cpp.o] Error 1
 make[1]: *** [CMakeFiles/Makefile2:972: CMakeFiles/NGFWTrafficGenerator.dir/all] Error 2
 make: *** [Makefile:156: all] Error 2
