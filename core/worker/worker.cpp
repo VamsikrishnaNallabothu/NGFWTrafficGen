@@ -82,8 +82,6 @@ void Worker::worker_loop() {
     PacketMutator mutator;
     mutator.initialize(static_cast<uint64_t>(config_.core_id));
     
-    uint16_t tx_burst_count = 0;
-    
     while (!should_stop_.load(std::memory_order_relaxed)) {
         // Process flows and build packets for transmission
         if (config_.flow_scheduler) {
@@ -168,9 +166,9 @@ void Worker::process_received_packets(rte_mbuf** mbufs, uint16_t count) {
 
         total_bytes += rte_pktmbuf_pkt_len(mbuf);
 
-        // Latency measurement (if udata64 carries TX timestamp)
-        if (config_.metrics_collector) {
-            uint64_t sent_ns = mbuf->udata64;
+        // Latency measurement (if udata carries TX timestamp)
+        if (config_.metrics_collector && mbuf->udata != nullptr) {
+            uint64_t sent_ns = reinterpret_cast<uint64_t>(mbuf->udata);
             if (sent_ns != 0 && now_ns > sent_ns) {
                 uint64_t delta_ns = now_ns - sent_ns;
                 config_.metrics_collector->record_latency(
@@ -296,10 +294,11 @@ void Worker::process_flows() {
                 mutator.recalculate_tcp_checksum(ip_hdr, tcp_hdr);
             }
 
-            // Stamp TX timestamp for latency measurement
-            mbuf->udata64 = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                std::chrono::steady_clock::now().time_since_epoch())
-                                .count();
+            // Stamp TX timestamp for latency measurement (store in udata pointer)
+            uint64_t tx_timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now().time_since_epoch())
+                                        .count();
+            mbuf->udata = reinterpret_cast<void*>(tx_timestamp);
 
             mbuf_count++;
 
