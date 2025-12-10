@@ -165,7 +165,7 @@ uint16_t PacketMutator::calculate_transport_checksum(const void* hdr,
     
     // Transport header checksum
     const uint16_t* words = reinterpret_cast<const uint16_t*>(hdr);
-    size_t word_count = (hdr_len + 1) / 2;
+    size_t word_count = hdr_len / 2;
     
     for (size_t i = 0; i < word_count; ++i) {
         sum += rte_be_to_cpu_16(words[i]);
@@ -173,7 +173,8 @@ uint16_t PacketMutator::calculate_transport_checksum(const void* hdr,
     
     // Handle odd length
     if (hdr_len % 2 == 1) {
-        uint8_t last_byte = *reinterpret_cast<const uint8_t*>(hdr + hdr_len - 1);
+        auto last_byte_ptr = reinterpret_cast<const uint8_t*>(hdr);
+        uint8_t last_byte = *(last_byte_ptr + hdr_len - 1);
         sum += last_byte << 8;
     }
     

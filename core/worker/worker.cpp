@@ -282,7 +282,8 @@ void Worker::process_flows() {
                 // For now we assume ESTABLISHED state and send pure ACK packets.
                 tcp_hdr->tcp_flags = RTE_TCP_ACK_FLAG;
                 tcp_hdr->sent_seq = rte_cpu_to_be_32(conn.send_seq);
-                tcp_hdr->recv_ack = rte_cpu_to_be_32(conn.recv_seq);
+                // ACK should reflect what we are acknowledging to the peer
+                tcp_hdr->recv_ack = rte_cpu_to_be_32(conn.send_ack);
 
                 uint16_t l4_len = rte_be_to_cpu_16(ip_hdr->total_length) - sizeof(rte_ipv4_hdr);
                 uint16_t tcp_hdr_len = (tcp_hdr->data_off >> 4) * 4;
