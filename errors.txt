@@ -1,27 +1,29 @@
 [ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/main.cpp.o
-/home/ubuntu/NGFWTrafficGen/main.cpp: In function ‘bool launch_workers(const trafficgen::AppConfig&)’:
-/home/ubuntu/NGFWTrafficGen/main.cpp:187:27: error: could not convert ‘worker.std::unique_ptr<trafficgen::Worker>::operator->()->trafficgen::Worker::start()’ from ‘void’ to ‘bool’
-  187 |         if (!worker->start()) {
-      |              ~~~~~~~~~~~~~^~
-      |                           |
-      |                           void
-/home/ubuntu/NGFWTrafficGen/main.cpp:187:27: error: in argument to unary !
 /home/ubuntu/NGFWTrafficGen/main.cpp: In function ‘int main(int, char**)’:
-/home/ubuntu/NGFWTrafficGen/main.cpp:342:21: error: ‘class trafficgen::Worker’ has no member named ‘join’
-  342 |             worker->join();
-      |                     ^~~~
-In file included from /usr/include/c++/13/memory:78,
-                 from /home/ubuntu/NGFWTrafficGen/main.cpp:3:
-/usr/include/c++/13/bits/unique_ptr.h: In instantiation of ‘std::__detail::__unique_ptr_t<_Tp> std::make_unique(_Args&& ...) [with _Tp = trafficgen::Worker; _Args = {trafficgen::Worker::Config&}; __detail::__unique_ptr_t<_Tp> = __detail::__unique_ptr_t<trafficgen::Worker>]’:
-/home/ubuntu/NGFWTrafficGen/main.cpp:186:47:   required from here
-/usr/include/c++/13/bits/unique_ptr.h:1070:30: error: no matching function for call to ‘trafficgen::Worker::Worker(trafficgen::Worker::Config&)’
- 1070 |     { return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...)); }
-      |                              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In file included from /home/ubuntu/NGFWTrafficGen/main.cpp:16:
-/home/ubuntu/NGFWTrafficGen/core/worker/worker.hpp:33:5: note: candidate: ‘trafficgen::Worker::Worker(const Config&, volatile bool&)’
-   33 |     Worker(const Config& config, volatile bool& force_quit);
-      |     ^~~~~~
-/home/ubuntu/NGFWTrafficGen/core/worker/worker.hpp:33:5: note:   candidate expects 2 arguments, 1 provided
-make[2]: *** [CMakeFiles/NGFWTrafficGenerator.dir/build.make:89: CMakeFiles/NGFWTrafficGenerator.dir/main.cpp.o] Error 1
+/home/ubuntu/NGFWTrafficGen/main.cpp:211:9: warning: variable ‘log_level’ set but not used [-Wunused-but-set-variable]
+  211 |     int log_level = 7;
+      |         ^~~~~~~~~
+[ 64%] Building CXX object CMakeFiles/NGFWTrafficGenerator.dir/core/packet/packet_builder.cpp.o
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp: In member function ‘void trafficgen::PacketBuilder::build_ethernet_header(rte_ether_hdr*, const std::string&, const std::string&, uint16_t)’:
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:111:36: error: ‘struct rte_ether_hdr’ has no member named ‘d_addr’; did you mean ‘dst_addr’?
+  111 |     mac_to_bytes(dst_mac, eth_hdr->d_addr.addr_bytes);
+      |                                    ^~~~~~
+      |                                    dst_addr
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:112:36: error: ‘struct rte_ether_hdr’ has no member named ‘s_addr’; did you mean ‘dst_addr’?
+  112 |     mac_to_bytes(src_mac, eth_hdr->s_addr.addr_bytes);
+      |                                    ^~~~~~
+      |                                    dst_addr
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp: In member function ‘uint16_t trafficgen::PacketBuilder::calculate_ip_checksum(const rte_ipv4_hdr*)’:
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:177:69: warning: converting a packed ‘const rte_ipv4_hdr’ pointer (alignment 1) to a ‘const uint16_t’ {aka ‘const short unsigned int’} pointer (alignment 2) may result in an unaligned pointer value [-Waddress-of-packed-member]
+  177 |     const uint16_t* words = reinterpret_cast<const uint16_t*>(ip_hdr);
+      |                                                                     ^
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp: In member function ‘uint16_t trafficgen::PacketBuilder::calculate_pseudo_header_checksum(uint32_t, uint32_t, uint8_t, uint16_t)’:
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:210:66: warning: converting a packed ‘trafficgen::PacketBuilder::calculate_pseudo_header_checksum(uint32_t, uint32_t, uint8_t, uint16_t)::pseudo_header’ pointer (alignment 1) to a ‘const uint16_t’ {aka ‘const short unsigned int’} pointer (alignment 2) may result in an unaligned pointer value [-Waddress-of-packed-member]
+  210 |     const uint16_t* words = reinterpret_cast<const uint16_t*>(&ph);
+      |                                                                  ^
+/home/ubuntu/NGFWTrafficGen/core/packet/packet_builder.cpp:194:12: note: defined here
+  194 |     struct pseudo_header {
+      |            ^~~~~~~~~~~~~
+make[2]: *** [CMakeFiles/NGFWTrafficGenerator.dir/build.make:117: CMakeFiles/NGFWTrafficGenerator.dir/core/packet/packet_builder.cpp.o] Error 1
 make[1]: *** [CMakeFiles/Makefile2:972: CMakeFiles/NGFWTrafficGenerator.dir/all] Error 2
 make: *** [Makefile:156: all] Error 2
