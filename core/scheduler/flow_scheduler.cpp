@@ -195,8 +195,8 @@ void FlowScheduler::update_flow_stats(uint32_t flow_id, uint64_t packets, uint64
     
     auto it = flows_.find(flow_id);
     if (it != flows_.end()) {
-        it->second.packets_sent.fetch_add(packets, std::memory_order_relaxed);
-        it->second.bytes_sent.fetch_add(bytes, std::memory_order_relaxed);
+        it->second->packets_sent.fetch_add(packets, std::memory_order_relaxed);
+        it->second->bytes_sent.fetch_add(bytes, std::memory_order_relaxed);
     }
 }
 
