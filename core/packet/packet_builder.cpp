@@ -279,4 +279,3 @@ void PacketBuilder::set_default_macs(std::string& src_mac, std::string& dst_mac)
 }
 
 } // namespace trafficgen
-
