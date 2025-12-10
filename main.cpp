@@ -228,6 +228,7 @@ int main(int argc, char* argv[]) {
                 return 1;
         }
     }
+    (void)log_level; // currently unused, suppress warning
     
     // Setup signal handlers
     signal(SIGINT, signal_handler);

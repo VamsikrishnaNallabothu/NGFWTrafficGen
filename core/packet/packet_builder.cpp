@@ -206,7 +206,7 @@ uint16_t PacketBuilder::calculate_pseudo_header_checksum(uint32_t src_ip,
         uint16_t length;
     } __attribute__((packed));
     
-    pseudo_header ph;
+    pseudo_header ph{};
     ph.src_ip = src_ip;
     ph.dst_ip = dst_ip;
     ph.zero = 0;

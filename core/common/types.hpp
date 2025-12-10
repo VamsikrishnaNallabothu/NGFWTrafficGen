@@ -64,6 +64,28 @@ struct CoreStats {
     std::atomic<uint64_t> tx_bytes{0};
     std::atomic<uint64_t> rx_bytes{0};
     std::atomic<uint64_t> errors{0};
+
+    CoreStats() = default;
+
+    // Custom copy to allow returning by value despite atomic members.
+    CoreStats(const CoreStats& other) {
+        tx_packets.store(other.tx_packets.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        rx_packets.store(other.rx_packets.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        tx_bytes.store(other.tx_bytes.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        rx_bytes.store(other.rx_bytes.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        errors.store(other.errors.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    }
+
+    CoreStats& operator=(const CoreStats& other) {
+        if (this != &other) {
+            tx_packets.store(other.tx_packets.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            rx_packets.store(other.rx_packets.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            tx_bytes.store(other.tx_bytes.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            rx_bytes.store(other.rx_bytes.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            errors.store(other.errors.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        }
+        return *this;
+    }
     
     void reset() {
         tx_packets = 0;
