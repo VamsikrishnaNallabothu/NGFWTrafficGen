@@ -44,7 +44,7 @@ Example usage:
 """
 
 import grpc
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any
 import sys
 import os
 
@@ -231,14 +231,14 @@ class TrafficGeneratorClient:
         
         metrics = {
             "global": {
-                "total_tx_packets": response.global.total_tx_packets,
-                "total_rx_packets": response.global.total_rx_packets,
-                "total_tx_bytes": response.global.total_tx_bytes,
-                "total_rx_bytes": response.global.total_rx_bytes,
-                "current_pps": response.global.current_pps,
-                "current_bps": response.global.current_bps,
-                "avg_latency_us": response.global.avg_latency_us,
-                "errors": response.global.errors
+                "total_tx_packets": response.global_.total_tx_packets,
+                "total_rx_packets": response.global_.total_rx_packets,
+                "total_tx_bytes": response.global_.total_tx_bytes,
+                "total_rx_bytes": response.global_.total_rx_bytes,
+                "current_pps": response.global_.current_pps,
+                "current_bps": response.global_.current_bps,
+                "avg_latency_us": response.global_.avg_latency_us,
+                "errors": response.global_.errors
             }
         }
         
@@ -352,4 +352,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
