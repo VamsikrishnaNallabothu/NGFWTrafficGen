@@ -122,15 +122,24 @@ bool configure_ports(const AppConfig& config) {
             return false;
         }
         
+        // Determine socket ID, falling back to 0 if it's invalid
+        int socket_id = rte_eth_dev_socket_id(port_config.port_id);
+        if (socket_id < 0) {
+            std::cout << "Warning: Invalid socket ID (" << socket_id
+                      << ") for port " << port_config.port_id
+                      << ". Falling back to socket 0.\n";
+            socket_id = 0;
+        }
+
         // Configure RX queues
         for (uint16_t q = 0; q < port_config.nb_rx_queues; ++q) {
             ret = rte_eth_rx_queue_setup(
                 port_config.port_id,
                 q,
                 port_config.nb_rx_desc,
-                rte_eth_dev_socket_id(port_config.port_id),
+                socket_id,
                 NULL,
-                g_mempool_manager->get_mempool(rte_eth_dev_socket_id(port_config.port_id)));
+                g_mempool_manager->get_mempool(socket_id));
             
             if (ret < 0) {
                 std::cerr << "Error: Failed to setup RX queue " << q 
@@ -145,7 +154,7 @@ bool configure_ports(const AppConfig& config) {
                 port_config.port_id,
                 q,
                 port_config.nb_tx_desc,
-                rte_eth_dev_socket_id(port_config.port_id),
+                socket_id,
                 NULL);
             
             if (ret < 0) {
