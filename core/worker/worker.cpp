@@ -64,21 +64,28 @@ uint32_t Worker::get_core_id() const {
 }
 
 void Worker::worker_loop() {
-    // Set CPU affinity to specified core
-    set_cpu_affinity();
+    // Register this thread with the DPDK EAL. This is crucial for non-EAL threads
+    // that need to call DPDK functions. It also sets the thread's affinity.
+    if (rte_eal_thread_register() < 0) {
+        std::cerr << "Error: Failed to register worker thread for core " << config_.core_id << std::endl;
+        running_.store(false, std::memory_order_relaxed);
+        return;
+    }
     
     // Pre-allocate mbuf array for bursts
     std::vector<rte_mbuf*> tx_mbufs(config_.tx_burst_size, nullptr);
     std::vector<rte_mbuf*> rx_mbufs(config_.rx_burst_size, nullptr);
     
-    // Get local mempool
+    // Get local mempool for this worker's socket
     rte_mempool* mempool = nullptr;
     if (config_.mempool_manager) {
-        mempool = config_.mempool_manager->get_local_mempool();
+        // Get the socket ID for the worker's core
+        unsigned int socket_id = rte_lcore_to_socket_id(config_.core_id);
+        mempool = config_.mempool_manager->get_mempool(socket_id);
     }
     
     if (mempool == nullptr) {
-        // Error: no mempool available
+        // Error: no mempool available for this core's socket
         running_.store(false, std::memory_order_relaxed);
         return;
     }
@@ -238,8 +245,9 @@ void Worker::process_flows() {
         return;
     }
     
-    // Get mempool
-    rte_mempool* mempool = config_.mempool_manager->get_local_mempool();
+    // Get mempool for this worker's socket
+    unsigned int socket_id = rte_lcore_to_socket_id(config_.core_id);
+    rte_mempool* mempool = config_.mempool_manager->get_mempool(socket_id);
     if (mempool == nullptr) {
         return;
     }
@@ -336,7 +344,8 @@ rte_mbuf* Worker::build_packet_from_template(const PacketTemplate& template_in) 
         return nullptr;
     }
     
-    rte_mempool* mempool = config_.mempool_manager->get_local_mempool();
+    unsigned int socket_id = rte_lcore_to_socket_id(config_.core_id);
+    rte_mempool* mempool = config_.mempool_manager->get_mempool(socket_id);
     if (mempool == nullptr) {
         return nullptr;
     }
@@ -358,16 +367,7 @@ rte_mbuf* Worker::build_packet_from_template(const PacketTemplate& template_in) 
 }
 
 void Worker::set_cpu_affinity() {
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(config_.core_id, &cpuset);
-    
-    pthread_t current_thread = pthread_self();
-    int rc = pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-    
-    if (rc != 0) {
-        // Failed to set affinity, but continue anyway
-    }
+    // This function is no longer needed as rte_eal_thread_register handles affinity.
 }
 
 } // namespace trafficgen
