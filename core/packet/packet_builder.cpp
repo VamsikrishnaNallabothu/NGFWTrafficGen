@@ -5,6 +5,9 @@
 #include <iomanip>
 #include <algorithm>
 #include <rte_version.h>
+#include <rte_ip.h> // For rte_ipv4_cksum
+#include <rte_tcp.h> // For rte_ipv4_udptcp_cksum
+#include <rte_udp.h> // For rte_ipv4_udptcp_cksum
 
 namespace trafficgen {
 
@@ -70,23 +73,25 @@ bool PacketBuilder::build_template(PacketTemplate& template_out,
     build_ip_header(ip_hdr, flow_key.src_ip, flow_key.dst_ip, ip_protocol, packet_size - eth_header_size);
     
     // Build transport header
-    uint8_t* transport_hdr = data + eth_header_size + ip_header_size;
+    uint8_t* transport_hdr_ptr = data + eth_header_size + ip_header_size;
     template_out.payload_offset = eth_header_size + ip_header_size + transport_header_size;
     
     if (protocol == "tcp") {
-        rte_tcp_hdr* tcp_hdr = reinterpret_cast<rte_tcp_hdr*>(transport_hdr);
+        rte_tcp_hdr* tcp_hdr = reinterpret_cast<rte_tcp_hdr*>(transport_hdr_ptr);
         build_tcp_header(tcp_hdr, flow_key.src_port, flow_key.dst_port);
+        tcp_hdr->cksum = rte_ipv4_udptcp_cksum(ip_hdr, tcp_hdr);
     } else if (protocol == "udp") {
-        rte_udp_hdr* udp_hdr = reinterpret_cast<rte_udp_hdr*>(transport_hdr);
+        rte_udp_hdr* udp_hdr = reinterpret_cast<rte_udp_hdr*>(transport_hdr_ptr);
         build_udp_header(udp_hdr, flow_key.src_port, flow_key.dst_port,
                         transport_header_size + payload_size);
+        udp_hdr->dgram_cksum = rte_ipv4_udptcp_cksum(ip_hdr, udp_hdr);
     } else if (protocol == "icmp") {
         // ICMP header - simple echo request
-        transport_hdr[0] = 8;  // Echo Request
-        transport_hdr[1] = 0;  // Code
-        *reinterpret_cast<uint16_t*>(&transport_hdr[2]) = 0;  // Checksum (calculated later)
-        *reinterpret_cast<uint16_t*>(&transport_hdr[4]) = 0;  // Identifier
-        *reinterpret_cast<uint16_t*>(&transport_hdr[6]) = 0;  // Sequence number
+        transport_hdr_ptr[0] = 8;  // Echo Request
+        transport_hdr_ptr[1] = 0;  // Code
+        *reinterpret_cast<uint16_t*>(&transport_hdr_ptr[2]) = 0;  // Checksum (calculated later)
+        *reinterpret_cast<uint16_t*>(&transport_hdr_ptr[4]) = 0;  // Identifier
+        *reinterpret_cast<uint16_t*>(&transport_hdr_ptr[6]) = 0;  // Sequence number
     }
     
     // Fill payload
@@ -96,7 +101,7 @@ bool PacketBuilder::build_template(PacketTemplate& template_out,
     
     // Calculate and set IP checksum
     ip_hdr->hdr_checksum = 0;
-    ip_hdr->hdr_checksum = calculate_ip_checksum(ip_hdr);
+    ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
     
     return true;
 }
@@ -172,55 +177,7 @@ void PacketBuilder::build_udp_header(rte_udp_hdr* udp_hdr,
     udp_hdr->src_port = rte_cpu_to_be_16(src_port);
     udp_hdr->dst_port = rte_cpu_to_be_16(dst_port);
     udp_hdr->dgram_len = rte_cpu_to_be_16(length);
-    udp_hdr->dgram_cksum = 0;  // Optional for UDP over IPv4
-}
-
-uint16_t PacketBuilder::calculate_ip_checksum(const rte_ipv4_hdr* ip_hdr) {
-    if (ip_hdr == nullptr) {
-        return 0;
-    }
-    
-    uint32_t sum = 0;
-    const uint16_t* words = reinterpret_cast<const uint16_t*>(ip_hdr);
-    
-    for (int i = 0; i < (int)(ip_hdr->version_ihl & 0x0F) * 2; ++i) {
-        sum += rte_be_to_cpu_16(words[i]);
-    }
-    
-    while (sum >> 16) {
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    }
-    
-    return ~sum;
-}
-
-uint16_t PacketBuilder::calculate_pseudo_header_checksum(uint32_t src_ip,
-                                                         uint32_t dst_ip,
-                                                         uint8_t protocol,
-                                                         uint16_t len) {
-    struct pseudo_header {
-        uint32_t src_ip;
-        uint32_t dst_ip;
-        uint8_t zero;
-        uint8_t protocol;
-        uint16_t length;
-    } __attribute__((packed));
-    
-    pseudo_header ph{};
-    ph.src_ip = src_ip;
-    ph.dst_ip = dst_ip;
-    ph.zero = 0;
-    ph.protocol = protocol;
-    ph.length = rte_cpu_to_be_16(len);
-    
-    uint32_t sum = 0;
-    const uint16_t* words = reinterpret_cast<const uint16_t*>(&ph);
-    
-    for (size_t i = 0; i < sizeof(pseudo_header) / 2; ++i) {
-        sum += words[i];
-    }
-    
-    return sum;
+    udp_hdr->dgram_cksum = 0;  // Optional for UDP over IPv4, but good to calculate
 }
 
 uint32_t PacketBuilder::ip_to_uint32(const std::string& ip_str) {
