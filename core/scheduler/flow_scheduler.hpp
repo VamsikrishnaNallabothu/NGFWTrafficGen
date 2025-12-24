@@ -10,6 +10,7 @@
 #include <mutex>
 #include <cstdint>
 #include <atomic>
+#include <rte_ether.h>
 
 namespace trafficgen {
 
@@ -22,9 +23,9 @@ struct FlowConfigInternal {
     uint64_t pps;  // Packets per second
     uint32_t duration_seconds;  // 0 means infinite
     bool stateless;
+    std::string dst_mac; // Destination MAC address for this flow
     PacketTemplate template_packet;
     std::unique_ptr<TokenBucket> token_bucket;
-    // TCP state for stateful TCP flows (protocol == "tcp" && !stateless)
     std::unique_ptr<TCPConnectionState> tcp_state;
     std::unique_ptr<TCPStateMachine> tcp_state_machine;
     
@@ -33,8 +34,6 @@ struct FlowConfigInternal {
     std::atomic<uint64_t> start_time_ns{0};
     std::atomic<bool> active{false};
 };
-
-// Note: Proto generates FlowConfig class - use FlowConfigInternal internally
 
 // Lightweight, copyable snapshot for reporting.
 struct FlowSnapshot {
@@ -51,20 +50,16 @@ struct FlowSnapshot {
     bool active;
 };
 
-/**
- * Flow scheduler for managing multiple traffic flows
- * Supports both stateless and stateful (TCP) flows
- */
 class FlowScheduler {
 public:
     FlowScheduler();
     ~FlowScheduler();
     
-    // Initialize scheduler
-    bool initialize();
+    // Initialize scheduler with the source MAC of the TX port
+    bool initialize(const rte_ether_addr& src_mac);
     
     // Add flow configuration
-    bool add_flow(const FlowConfigInternal& config);
+    bool add_flow(FlowConfigInternal& config);
     
     // Remove flow
     bool remove_flow(uint32_t flow_id);
@@ -75,27 +70,27 @@ public:
     // Stop flow
     bool stop_flow(uint32_t flow_id);
     
-    // Get flows ready for transmission (based on rate limits)
+    // Get flows ready for transmission
     std::vector<uint32_t> get_ready_flows(uint32_t max_flows);
     
     // Update flow statistics
     void update_flow_stats(uint32_t flow_id, uint64_t packets, uint64_t bytes);
     
-    // Get flow configuration (shared ownership to avoid dangling)
+    // Get flow configuration
     std::shared_ptr<FlowConfigInternal> get_flow(uint32_t flow_id);
     
     // Get all active flows
     std::vector<uint32_t> get_active_flows() const;
     
-    // Get snapshot of per-flow statistics (flow_id -> FlowSnapshot copy)
+    // Get snapshot of per-flow statistics
     std::unordered_map<uint32_t, FlowSnapshot> get_all_flows_snapshot() const;
 
-    // Handle an incoming TCP packet (RX path) for stateful flows.
+    // Handle an incoming TCP packet
     void handle_tcp_rx(const FlowKey& key,
                        const rte_tcp_hdr* tcp_hdr,
                        uint32_t payload_len);
 
-    // Check if flow is expired (duration exceeded)
+    // Check if flow is expired
     bool is_flow_expired(uint32_t flow_id) const;
     
     // Clear all flows
@@ -106,18 +101,13 @@ public:
 
 private:
     std::unordered_map<uint32_t, std::shared_ptr<FlowConfigInternal>> flows_;
-    // Optional mapping from 5‑tuple to flow ID for RX path lookups.
     std::unordered_map<FlowKey, uint32_t, FlowKey::Hash> flow_lookup_;
     mutable std::mutex mutex_;
     PacketBuilder packet_builder_;
-    
-    // Check if flow should be active
-    bool should_flow_be_active(const FlowConfigInternal& config) const;
+    rte_ether_addr src_mac_; // Real MAC of the egress port
 
-    // Helper to check expiration while lock is already held
     bool is_flow_expired_locked(const FlowConfigInternal& config,
                                 uint64_t now_ns) const;
 };
 
 } // namespace trafficgen
-
