@@ -31,14 +31,14 @@ public:
     // Update error count for a core
     void update_errors(uint32_t core_id, uint64_t count);
     
-    // Get per-core statistics
-    CoreStats get_core_stats(uint32_t core_id) const;
+    // Get per-core statistics snapshot
+    CoreStatsSnapshot get_core_stats(uint32_t core_id) const;
     
-    // Get global aggregated statistics
-    CoreStats get_global_stats() const;
+    // Get global aggregated statistics snapshot
+    CoreStatsSnapshot get_global_stats() const;
     
-    // Get all per-core statistics
-    std::vector<CoreStats> get_all_core_stats() const;
+    // Get all per-core statistics snapshots
+    std::vector<CoreStatsSnapshot> get_all_core_stats() const;
     
     // Reset all statistics
     void reset_all();
@@ -110,4 +110,3 @@ private:
 };
 
 } // namespace trafficgen
-
