@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <iostream>
 
 namespace trafficgen {
 
@@ -25,6 +26,7 @@ grpc::Status TrafficGeneratorServiceImpl::ConfigureIMIX(
     const IMIXConfig* request,
     StatusResponse* response) {
     
+    (void)context;
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!imix_engine_) {
@@ -34,13 +36,11 @@ grpc::Status TrafficGeneratorServiceImpl::ConfigureIMIX(
         return grpc::Status::OK;
     }
     
-    // Convert proto entries to internal format
     std::vector<IMIXEntryInternal> entries;
     for (const auto& entry : request->entries()) {
         entries.push_back(convert_proto_imix_entry(entry));
     }
     
-    // Configure IMIX engine
     if (imix_engine_->configure(entries, request->target_pps())) {
         response->set_success(true);
         response->set_message("IMIX configured successfully");
@@ -59,6 +59,7 @@ grpc::Status TrafficGeneratorServiceImpl::ConfigureFlows(
     const FlowConfig* request,
     StatusResponse* response) {
     
+    (void)context;
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!flow_scheduler_) {
@@ -68,12 +69,10 @@ grpc::Status TrafficGeneratorServiceImpl::ConfigureFlows(
         return grpc::Status::OK;
     }
     
-    // Convert proto flows to internal format
     bool all_success = true;
     std::string error_message;
     
     for (const auto& proto_flow : request->flows()) {
-        // Use internal FlowConfigInternal struct (not proto message)
         FlowConfigInternal internal_config;
         internal_config.flow_id = proto_flow.flow_id();
         internal_config.flow_key = convert_proto_flow_key(proto_flow);
@@ -82,7 +81,9 @@ grpc::Status TrafficGeneratorServiceImpl::ConfigureFlows(
         internal_config.pps = proto_flow.pps();
         internal_config.duration_seconds = proto_flow.duration_seconds();
         internal_config.stateless = request->stateless();
-        
+        // Pass the destination MAC from the proto message
+        internal_config.dst_mac = proto_flow.dst_mac();
+
         if (!flow_scheduler_->add_flow(internal_config)) {
             all_success = false;
             error_message += "Failed to add flow " + std::to_string(proto_flow.flow_id()) + "; ";
@@ -107,6 +108,7 @@ grpc::Status TrafficGeneratorServiceImpl::StartTraffic(
     const StartRequest* request,
     StatusResponse* response) {
     
+    (void)context;
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (request->reset_stats() && metrics_collector_) {
@@ -114,16 +116,16 @@ grpc::Status TrafficGeneratorServiceImpl::StartTraffic(
     }
     
     if (flow_scheduler_) {
-        // Start all active flows
-        auto active_flows = flow_scheduler_->get_active_flows();
-        for (uint32_t flow_id : active_flows) {
-            flow_scheduler_->start_flow(flow_id);
+        auto all_flows = flow_scheduler_->get_all_flows_snapshot();
+        if (all_flows.empty()) {
+            response->set_success(false);
+            response->set_message("No flows configured to start");
+            response->set_error_code(-2);
+            return grpc::Status::OK;
         }
-        
-        // If no active flows, start all flows
-        if (active_flows.empty()) {
-            // Get all flows and start them
-            // This requires a method to get all flows - simplified for now
+
+        for (const auto& pair : all_flows) {
+            flow_scheduler_->start_flow(pair.first);
         }
     }
     
@@ -143,6 +145,8 @@ grpc::Status TrafficGeneratorServiceImpl::StopTraffic(
     const StopRequest* request,
     StatusResponse* response) {
     
+    (void)context;
+    (void)request;
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (flow_scheduler_) {
@@ -168,40 +172,38 @@ grpc::Status TrafficGeneratorServiceImpl::GetMetrics(
     const MetricsRequest* request,
     MetricsResponse* response) {
     
-    std::lock_guard<std::mutex> lock(mutex_);
-    
+    (void)context;
+
     if (!metrics_collector_) {
         return grpc::Status(grpc::StatusCode::INTERNAL, "Metrics collector not initialized");
     }
     
-    // Get global metrics
-    CoreStats global_stats = metrics_collector_->get_global_stats();
+    CoreStatsSnapshot global_stats = metrics_collector_->get_global_stats();
+
     GlobalMetrics* global = response->mutable_global();
     
-    global->set_total_tx_packets(global_stats.tx_packets.load());
-    global->set_total_rx_packets(global_stats.rx_packets.load());
-    global->set_total_tx_bytes(global_stats.tx_bytes.load());
-    global->set_total_rx_bytes(global_stats.rx_bytes.load());
+    global->set_total_tx_packets(global_stats.tx_packets);
+    global->set_total_rx_packets(global_stats.rx_packets);
+    global->set_total_tx_bytes(global_stats.tx_bytes);
+    global->set_total_rx_bytes(global_stats.rx_bytes);
     global->set_current_pps(metrics_collector_->calculate_global_pps());
     global->set_current_bps(metrics_collector_->calculate_global_bps());
     global->set_avg_latency_us(metrics_collector_->get_average_latency_us());
-    global->set_errors(global_stats.errors.load());
+    global->set_errors(global_stats.errors);
     
-    // Get per-core metrics if requested
     if (request->include_per_core()) {
-        std::vector<CoreStats> per_core = metrics_collector_->get_all_core_stats();
+        auto per_core = metrics_collector_->get_all_core_stats();
         for (size_t i = 0; i < per_core.size(); ++i) {
             CoreMetrics* core_metrics = response->add_per_core();
             core_metrics->set_core_id(static_cast<uint32_t>(i));
-            core_metrics->set_tx_packets(per_core[i].tx_packets.load());
-            core_metrics->set_rx_packets(per_core[i].rx_packets.load());
-            core_metrics->set_tx_bytes(per_core[i].tx_bytes.load());
-            core_metrics->set_rx_bytes(per_core[i].rx_bytes.load());
+            core_metrics->set_tx_packets(per_core[i].tx_packets);
+            core_metrics->set_rx_packets(per_core[i].rx_packets);
+            core_metrics->set_tx_bytes(per_core[i].tx_bytes);
+            core_metrics->set_rx_bytes(per_core[i].rx_bytes);
             core_metrics->set_pps(metrics_collector_->calculate_current_pps(i));
         }
     }
 
-    // Latency histogram if requested
     if (request->include_latency_histogram()) {
         auto buckets = metrics_collector_->get_latency_histogram();
         LatencyHistogram* hist = response->mutable_latency();
@@ -221,42 +223,38 @@ grpc::Status TrafficGeneratorServiceImpl::GetStats(
     const StatsRequest* request,
     StatsResponse* response) {
     
-    std::lock_guard<std::mutex> lock(mutex_);
-    
+    (void)context;
+
     if (!metrics_collector_) {
         return grpc::Status(grpc::StatusCode::INTERNAL, "Metrics collector not initialized");
     }
     
-    // Get global metrics
-    CoreStats global_stats = metrics_collector_->get_global_stats();
+    CoreStatsSnapshot global_stats = metrics_collector_->get_global_stats();
     GlobalMetrics* global = response->mutable_metrics();
     
-    global->set_total_tx_packets(global_stats.tx_packets.load());
-    global->set_total_rx_packets(global_stats.rx_packets.load());
-    global->set_total_tx_bytes(global_stats.tx_bytes.load());
-    global->set_total_rx_bytes(global_stats.rx_bytes.load());
+    global->set_total_tx_packets(global_stats.tx_packets);
+    global->set_total_rx_packets(global_stats.rx_packets);
+    global->set_total_tx_bytes(global_stats.tx_bytes);
+    global->set_total_rx_bytes(global_stats.rx_bytes);
     global->set_current_pps(metrics_collector_->calculate_global_pps());
     global->set_current_bps(metrics_collector_->calculate_global_bps());
-    global->set_errors(global_stats.errors.load());
+    global->set_errors(global_stats.errors);
     
     response->set_uptime_seconds(metrics_collector_->get_uptime_seconds());
     
-    // Get flow statistics if flow scheduler is available
     if (request->detailed() && flow_scheduler_) {
         auto flows = flow_scheduler_->get_all_flows_snapshot();
         for (const auto& kv : flows) {
             const FlowSnapshot& cfg = kv.second;
             FlowStats& fs = (*response->mutable_flow_stats())[cfg.flow_id];
             fs.set_flow_id(cfg.flow_id);
-            uint64_t pkts = cfg.packets_sent;
-            uint64_t bytes = cfg.bytes_sent;
-            fs.set_tx_packets(pkts);
-            fs.set_tx_bytes(bytes);
+            fs.set_tx_packets(cfg.packets_sent);
+            fs.set_tx_bytes(cfg.bytes_sent);
 
             double uptime = static_cast<double>(metrics_collector_->get_uptime_seconds());
             double avg_pps = 0.0;
             if (uptime > 0.0) {
-                avg_pps = static_cast<double>(pkts) / uptime;
+                avg_pps = static_cast<double>(cfg.packets_sent) / uptime;
             }
             fs.set_avg_pps(avg_pps);
         }
@@ -281,7 +279,7 @@ FlowKey TrafficGeneratorServiceImpl::convert_proto_flow_key(const Flow& flow) {
     } else if (flow.protocol() == "icmp") {
         key.protocol = IPPROTO_ICMP;
     } else {
-        key.protocol = IPPROTO_UDP;  // Default
+        key.protocol = IPPROTO_UDP;
     }
     
     return key;
@@ -361,4 +359,3 @@ bool GRPCServer::is_running() const {
 }
 
 } // namespace trafficgen
-
