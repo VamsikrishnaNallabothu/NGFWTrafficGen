@@ -29,6 +29,8 @@ std::shared_ptr<FlowScheduler> g_flow_scheduler;
 std::shared_ptr<IMIXEngine> g_imix_engine;
 std::shared_ptr<MetricsCollector> g_metrics_collector;
 int g_timestamp_dynfield_offset = -1;
+// Store the MAC address of the primary traffic port
+rte_ether_addr g_port_mac;
 
 // Signal handler for graceful shutdown
 void signal_handler(int signum) {
@@ -99,7 +101,9 @@ bool configure_ports(const AppConfig& config) {
     
     std::cout << "Found " << nb_ports << " Ethernet port(s)\n";
     
-    // Configure each port
+    // For simplicity, we assume the first available port is the one we use for traffic.
+    bool first_port = true;
+
     for (const auto& port_config : config.ports) {
         if (port_config.port_id >= nb_ports) {
             std::cerr << "Warning: Port " << port_config.port_id 
@@ -110,7 +114,6 @@ bool configure_ports(const AppConfig& config) {
         struct rte_eth_conf port_conf;
         memset(&port_conf, 0, sizeof(port_conf));
         
-        // Configure device
         int ret = rte_eth_dev_configure(
             port_config.port_id,
             port_config.nb_rx_queues,
@@ -122,25 +125,18 @@ bool configure_ports(const AppConfig& config) {
             return false;
         }
         
-        // Determine socket ID, falling back to 0 if it's invalid
         int socket_id = rte_eth_dev_socket_id(port_config.port_id);
-        if (socket_id < 0) {
+        if (socket_id < 0 || socket_id >= RTE_MAX_NUMA_NODES) {
             std::cout << "Warning: Invalid socket ID (" << socket_id
                       << ") for port " << port_config.port_id
                       << ". Falling back to socket 0.\n";
             socket_id = 0;
         }
 
-        // Configure RX queues
         for (uint16_t q = 0; q < port_config.nb_rx_queues; ++q) {
             ret = rte_eth_rx_queue_setup(
-                port_config.port_id,
-                q,
-                port_config.nb_rx_desc,
-                socket_id,
-                NULL,
-                g_mempool_manager->get_mempool(socket_id));
-            
+                port_config.port_id, q, port_config.nb_rx_desc,
+                socket_id, NULL, g_mempool_manager->get_mempool(socket_id));
             if (ret < 0) {
                 std::cerr << "Error: Failed to setup RX queue " << q 
                           << " on port " << port_config.port_id << "\n";
@@ -148,15 +144,10 @@ bool configure_ports(const AppConfig& config) {
             }
         }
         
-        // Configure TX queues
         for (uint16_t q = 0; q < port_config.nb_tx_queues; ++q) {
             ret = rte_eth_tx_queue_setup(
-                port_config.port_id,
-                q,
-                port_config.nb_tx_desc,
-                socket_id,
-                NULL);
-            
+                port_config.port_id, q, port_config.nb_tx_desc,
+                socket_id, NULL);
             if (ret < 0) {
                 std::cerr << "Error: Failed to setup TX queue " << q 
                           << " on port " << port_config.port_id << "\n";
@@ -164,14 +155,12 @@ bool configure_ports(const AppConfig& config) {
             }
         }
         
-        // Start device
         ret = rte_eth_dev_start(port_config.port_id);
         if (ret < 0) {
             std::cerr << "Error: Failed to start port " << port_config.port_id << "\n";
             return false;
         }
         
-        // Display MAC address
         struct rte_ether_addr addr;
         ret = rte_eth_macaddr_get(port_config.port_id, &addr);
         if (ret == 0) {
@@ -180,6 +169,11 @@ bool configure_ports(const AppConfig& config) {
                        addr.addr_bytes[0], addr.addr_bytes[1],
                        addr.addr_bytes[2], addr.addr_bytes[3],
                        addr.addr_bytes[4], addr.addr_bytes[5]);
+            // Store the MAC of the first configured port
+            if (first_port) {
+                g_port_mac = addr;
+                first_port = false;
+            }
         }
         
         std::cout << "Port " << port_config.port_id << " configured successfully\n";
@@ -193,7 +187,6 @@ bool launch_workers(const AppConfig& config) {
     g_workers.reserve(config.core_mappings.size());
     
     for (const auto& mapping : config.core_mappings) {
-        // Verify core is available
         if (!rte_lcore_is_enabled(mapping.core_id)) {
             std::cerr << "Warning: Core " << mapping.core_id << " is not enabled\n";
             continue;
@@ -228,7 +221,6 @@ bool launch_workers(const AppConfig& config) {
 }
 
 int main(int argc, char* argv[]) {
-    // Parse command line arguments
     static struct option long_options[] = {
         {"config", required_argument, 0, 'c'},
         {"log-level", required_argument, 0, 'l'},
@@ -257,23 +249,19 @@ int main(int argc, char* argv[]) {
                 return 1;
         }
     }
-    (void)log_level; // currently unused, suppress warning
+    (void)log_level;
     
-    // Setup signal handlers
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
-    // Initialize DPDK EAL
     if (!initialize_dpdk(argc, argv)) {
         return 1;
     }
 
-    // Register timestamp dynamic field
     if (!register_timestamp_dynfield()) {
         return 1;
     }
     
-    // Parse configuration
     AppConfig config;
     if (!config_path.empty()) {
         ConfigParser parser;
@@ -285,23 +273,25 @@ int main(int argc, char* argv[]) {
         config = ConfigParser::get_default_config();
     }
     
-    // Validate configuration
     ConfigParser parser;
     if (!parser.validate_config(config)) {
         std::cerr << "Error: Invalid configuration\n";
         return 1;
     }
     
-    // Initialize shared components
     g_mempool_manager = std::make_shared<MempoolManager>();
-    if (!g_mempool_manager->initialize(config.mbufs_per_socket, 
-                                       config.mbuf_cache_size)) {
+    if (!g_mempool_manager->initialize(config.mbufs_per_socket, config.mbuf_cache_size)) {
         std::cerr << "Error: Failed to initialize mempool manager\n";
         return 1;
     }
     
+    // Configure network ports before initializing components that need the MAC address
+    if (!configure_ports(config)) {
+        return 1;
+    }
+
     g_flow_scheduler = std::make_shared<FlowScheduler>();
-    if (!g_flow_scheduler->initialize()) {
+    if (!g_flow_scheduler->initialize(g_port_mac)) { // Pass the real MAC address
         std::cerr << "Error: Failed to initialize flow scheduler\n";
         return 1;
     }
@@ -315,12 +305,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Configure network ports
-    if (!configure_ports(config)) {
-        return 1;
-    }
-    
-    // Initialize and start gRPC server (on main thread or separate thread)
     g_grpc_server = std::make_unique<GRPCServer>();
     if (!g_grpc_server->initialize(config.grpc_config.listen_address,
                                    config.grpc_config.port,
@@ -338,7 +322,6 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    // Launch worker threads
     if (!launch_workers(config)) {
         std::cerr << "Error: Failed to launch workers\n";
         return 1;
@@ -348,37 +331,28 @@ int main(int argc, char* argv[]) {
     std::cout << "Use gRPC API to configure and control traffic generation.\n";
     std::cout << "Press Ctrl+C to stop.\n\n";
     
-    // Main loop - wait for signal
     while (g_running.load()) {
         sleep(1);
-        
-        // Optional: Print periodic statistics
-        // This can be enabled for debugging/monitoring
     }
     
-    // Cleanup
     std::cout << "Shutting down...\n";
     
-    // Stop gRPC server
     if (g_grpc_server) {
         g_grpc_server->stop();
     }
     
-    // Stop all workers
     for (auto& worker : g_workers) {
         if (worker) {
             worker->stop();
         }
     }
     
-    // Wait for workers to finish
     for (auto& worker : g_workers) {
         if (worker) {
             worker->join();
         }
     }
     
-    // Stop all ports
     for (const auto& port_config : config.ports) {
         rte_eth_dev_stop(port_config.port_id);
     }
