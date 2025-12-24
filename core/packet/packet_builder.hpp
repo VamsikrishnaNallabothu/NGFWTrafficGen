@@ -54,16 +54,7 @@ public:
                          uint16_t src_port,
                          uint16_t dst_port,
                          uint16_t length);
-    
-    // Calculate IP checksum
-    uint16_t calculate_ip_checksum(const rte_ipv4_hdr* ip_hdr);
-    
-    // Calculate TCP/UDP pseudo-header checksum
-    uint16_t calculate_pseudo_header_checksum(uint32_t src_ip,
-                                             uint32_t dst_ip,
-                                             uint8_t protocol,
-                                             uint16_t len);
-    
+
     // Convert IP string to network byte order
     uint32_t ip_to_uint32(const std::string& ip_str);
     
@@ -82,4 +73,3 @@ private:
 };
 
 } // namespace trafficgen
-
