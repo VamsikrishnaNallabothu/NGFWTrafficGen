@@ -1,6 +1,4 @@
 #include "core/packet/packet_mutator.hpp"
-#include "core/packet/packet_builder.hpp"
-#include <rte_udp.h>
 #include <cstring>
 #include <ctime>
 
@@ -27,31 +25,39 @@ bool PacketMutator::clone_and_mutate(rte_mbuf* mbuf,
     if (mbuf == nullptr || template_in.data.empty()) {
         return false;
     }
-    
-    // Ensure mbuf has enough space
-    if (rte_pktmbuf_pkt_len(mbuf) < template_in.total_size) {
-        if (rte_pktmbuf_append(mbuf, template_in.total_size - rte_pktmbuf_pkt_len(mbuf)) == nullptr) {
+
+    uint32_t final_size = template_in.total_size;
+
+    if (rte_pktmbuf_pkt_len(mbuf) < final_size) {
+        if (rte_pktmbuf_append(mbuf, final_size - rte_pktmbuf_pkt_len(mbuf)) == nullptr) {
             return false;
         }
+    } else if (rte_pktmbuf_pkt_len(mbuf) > final_size) {
+        rte_pktmbuf_trim(mbuf, rte_pktmbuf_pkt_len(mbuf) - final_size);
     }
-    
-    // Copy template data to mbuf
+
     uint8_t* data = rte_pktmbuf_mtod(mbuf, uint8_t*);
-    std::memcpy(data, template_in.data.data(), template_in.total_size);
-    
-    // Update packet length
-    mbuf->pkt_len = template_in.total_size;
-    mbuf->data_len = template_in.total_size;
-    
-    // Get headers
-    rte_ether_hdr* eth_hdr = rte_pktmbuf_mtod(mbuf, rte_ether_hdr*);
-    rte_ipv4_hdr* ip_hdr = reinterpret_cast<rte_ipv4_hdr*>(
-        reinterpret_cast<uint8_t*>(eth_hdr) + sizeof(rte_ether_hdr));
-    
-    // Mutate IP ID
+
+    size_t header_size = template_in.payload_offset;
+    if (template_in.data.size() < header_size) {
+        return false;
+    }
+    std::memcpy(data, template_in.data.data(), header_size);
+
+    size_t payload_size = final_size - header_size;
+    if (payload_size > 0) {
+        std::memset(data + header_size, 0x00, payload_size);
+    }
+
+    mbuf->pkt_len = final_size;
+    mbuf->data_len = final_size;
+
+    rte_ipv4_hdr* ip_hdr = reinterpret_cast<rte_ipv4_hdr*>(data + sizeof(rte_ether_hdr));
+
+    ip_hdr->total_length = rte_cpu_to_be_16(final_size - sizeof(rte_ether_hdr));
+
     mutate_ip_id(ip_hdr, generate_ip_id());
-    
-    // Mutate transport layer based on protocol
+
     if (ip_hdr->next_proto_id == IPPROTO_TCP) {
         rte_tcp_hdr* tcp_hdr = reinterpret_cast<rte_tcp_hdr*>(
             reinterpret_cast<uint8_t*>(ip_hdr) + sizeof(rte_ipv4_hdr));
@@ -61,9 +67,12 @@ bool PacketMutator::clone_and_mutate(rte_mbuf* mbuf,
         } else {
             mutate_tcp_seq(tcp_hdr, generate_sequence_number());
         }
+    } else if (ip_hdr->next_proto_id == IPPROTO_UDP) {
+        rte_udp_hdr* udp_hdr = reinterpret_cast<rte_udp_hdr*>(
+            reinterpret_cast<uint8_t*>(ip_hdr) + sizeof(rte_ipv4_hdr));
+        udp_hdr->dgram_len = rte_cpu_to_be_16(final_size - sizeof(rte_ether_hdr) - sizeof(rte_ipv4_hdr));
     }
-    
-    // Update checksums if requested
+
     if (update_checksums) {
         recalculate_ip_checksum(ip_hdr);
         
@@ -114,9 +123,8 @@ void PacketMutator::recalculate_ip_checksum(rte_ipv4_hdr* ip_hdr) {
         return;
     }
     
-    PacketBuilder builder;
     ip_hdr->hdr_checksum = 0;
-    ip_hdr->hdr_checksum = builder.calculate_ip_checksum(ip_hdr);
+    ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
 }
 
 void PacketMutator::recalculate_tcp_checksum(rte_ipv4_hdr* ip_hdr, rte_tcp_hdr* tcp_hdr) {
@@ -124,9 +132,8 @@ void PacketMutator::recalculate_tcp_checksum(rte_ipv4_hdr* ip_hdr, rte_tcp_hdr* 
         return;
     }
     
-    uint16_t tcp_len = rte_be_to_cpu_16(ip_hdr->total_length) - sizeof(rte_ipv4_hdr);
-    uint16_t checksum = calculate_transport_checksum(tcp_hdr, tcp_len, ip_hdr, IPPROTO_TCP);
-    tcp_hdr->cksum = checksum;
+    tcp_hdr->cksum = 0;
+    tcp_hdr->cksum = rte_ipv4_udptcp_cksum(ip_hdr, tcp_hdr);
 }
 
 void PacketMutator::recalculate_udp_checksum(rte_ipv4_hdr* ip_hdr, rte_udp_hdr* udp_hdr) {
@@ -134,9 +141,8 @@ void PacketMutator::recalculate_udp_checksum(rte_ipv4_hdr* ip_hdr, rte_udp_hdr* 
         return;
     }
     
-    uint16_t udp_len = rte_be_to_cpu_16(udp_hdr->dgram_len);
-    uint16_t checksum = calculate_transport_checksum(udp_hdr, udp_len, ip_hdr, IPPROTO_UDP);
-    udp_hdr->dgram_cksum = checksum;
+    udp_hdr->dgram_cksum = 0;
+    udp_hdr->dgram_cksum = rte_ipv4_udptcp_cksum(ip_hdr, udp_hdr);
 }
 
 uint16_t PacketMutator::generate_ip_id() {
@@ -153,38 +159,4 @@ uint32_t PacketMutator::generate_sequence_number() {
     return seq_dist_(rng_);
 }
 
-uint16_t PacketMutator::calculate_transport_checksum(const void* hdr,
-                                                     size_t hdr_len,
-                                                     const rte_ipv4_hdr* ip_hdr,
-                                                     uint8_t protocol) {
-    PacketBuilder builder;
-    
-    // Pseudo-header checksum
-    uint32_t sum = builder.calculate_pseudo_header_checksum(
-        ip_hdr->src_addr, ip_hdr->dst_addr, protocol, static_cast<uint16_t>(hdr_len));
-    
-    // Transport header checksum
-    const uint16_t* words = reinterpret_cast<const uint16_t*>(hdr);
-    size_t word_count = hdr_len / 2;
-    
-    for (size_t i = 0; i < word_count; ++i) {
-        sum += rte_be_to_cpu_16(words[i]);
-    }
-    
-    // Handle odd length
-    if (hdr_len % 2 == 1) {
-        auto last_byte_ptr = reinterpret_cast<const uint8_t*>(hdr);
-        uint8_t last_byte = *(last_byte_ptr + hdr_len - 1);
-        sum += last_byte << 8;
-    }
-    
-    // Fold to 16 bits
-    while (sum >> 16) {
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    }
-    
-    return ~sum;
-}
-
 } // namespace trafficgen
-
