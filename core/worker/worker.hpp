@@ -51,8 +51,8 @@ public:
     // Check if worker is running
     bool is_running() const;
 
-    // Get worker statistics
-    CoreStats get_stats() const;
+    // Get worker statistics snapshot
+    CoreStatsSnapshot get_stats() const;
 
     // Get core ID
     uint32_t get_core_id() const;
@@ -80,9 +80,6 @@ private:
 
     // Build packet from template
     rte_mbuf* build_packet_from_template(const PacketTemplate& template_in);
-
-    // Set CPU affinity
-    void set_cpu_affinity();
 };
 
 } // namespace trafficgen
