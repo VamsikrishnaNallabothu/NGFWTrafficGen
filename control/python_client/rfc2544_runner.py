@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
 """
 Python Runner for RFC 2544 IMIX Profile
-
-This script uses the TrafficGeneratorClient to configure and run a
-standard IMIX (Internet Mix) traffic profile, often used for performance
-testing and based on the frame sizes specified in RFC 2544.
-
-The IMIX profile used here consists of:
-- 7 packets of 64 bytes (~58.33%)
-- 4 packets of 594 bytes (~33.33%)
-- 1 packet of 1518 bytes (~8.33%)
 """
 
 import time
@@ -17,8 +8,22 @@ from client import TrafficGeneratorClient
 
 # --- Configuration ---
 SERVER_ADDRESS = "localhost:50051"
-TARGET_PPS = 1_000_000  # Target 1 Million packets per second
-TRAFFIC_DURATION_SECONDS = 10  # How long to run traffic for monitoring
+TARGET_PPS = 1_000_000
+TRAFFIC_DURATION_SECONDS = 10
+
+# ======================================================================
+# ==  CRITICAL: You must configure these values for your environment  ==
+# ======================================================================
+# The IP address of the machine that will RECEIVE the traffic.
+TARGET_IP = "10.130.39.47" 
+# The MAC address of the TARGET_IP machine's network interface.
+TARGET_MAC = "02:e1:3e:35:fc:37" # Example: "0A:4A:27:63:31:A4"
+
+# The source IP that will be stamped on the packets. This should be the
+# private IP assigned to the DPDK-controlled network interface on your
+# traffic generator VM.
+SOURCE_IP = "10.130.3.168"
+# ======================================================================
 
 # RFC 2544-based IMIX Profile
 RFC2544_IMIX_PROFILE = [
@@ -43,16 +48,6 @@ def print_final_stats(stats: dict):
     print(f"  - Errors:           {metrics.get('errors', 0):,}")
     print(f"  - Uptime:           {stats.get('uptime_seconds', 0):.2f} seconds")
 
-    if "per_core" in stats and stats["per_core"]:
-        print("\nPer-Core Statistics:")
-        for core_stat in stats["per_core"]:
-            print(f"  - Core {core_stat['core_id']}:")
-            print(f"    - TX Packets: {core_stat.get('tx_packets', 0):,}")
-            print(f"    - RX Packets: {core_stat.get('rx_packets', 0):,}")
-            print(f"    - TX Bytes:   {core_stat.get('tx_bytes', 0):,}")
-            print(f"    - RX Bytes:   {core_stat.get('rx_bytes', 0):,}")
-            print(f"    - PPS:        {core_stat.get('pps', 0):,.2f}")
-
     if "flow_stats" in stats and stats["flow_stats"]:
         print("\nFlow Statistics:")
         for flow_id, flow_stat in stats["flow_stats"].items():
@@ -71,7 +66,6 @@ def main():
         with TrafficGeneratorClient(SERVER_ADDRESS) as client:
             print("Connection successful.")
 
-            # 1. Configure the IMIX profile
             print(f"\nConfiguring IMIX profile with target PPS: {TARGET_PPS:,}...")
             result = client.configure_imix(
                 entries=RFC2544_IMIX_PROFILE,
@@ -82,7 +76,25 @@ def main():
                 return
             print(f"IMIX configuration successful: {result.get('message')}")
 
-            # 2. Start traffic generation
+            print(f"\nConfiguring flow to send traffic to {TARGET_IP} (MAC: {TARGET_MAC})...")
+            result = client.configure_flows([
+                {
+                    "flow_id": 1,
+                    "src_ip": SOURCE_IP,
+                    "dst_ip": TARGET_IP,
+                    "dst_mac": TARGET_MAC, # Pass the destination MAC
+                    "src_port": 10000,
+                    "dst_port": 5201, # Default iperf3 port
+                    "protocol": "udp",
+                    "pps": TARGET_PPS,
+                    "packet_size": 0
+                }
+            ])
+            if not result.get("success"):
+                print(f"Error configuring flow: {result.get('message')}")
+                return
+            print("Flow configured successfully.")
+
             print("\nStarting traffic...")
             result = client.start_traffic(reset_stats=True)
             if not result.get("success"):
@@ -90,26 +102,20 @@ def main():
                 return
             print("Traffic started successfully.")
 
-            # 3. Monitor metrics for a specified duration
             print(f"\nMonitoring traffic for {TRAFFIC_DURATION_SECONDS} seconds...")
             for i in range(TRAFFIC_DURATION_SECONDS):
                 time.sleep(1)
                 try:
-                    metrics = client.get_metrics(include_per_core=True)
+                    metrics = client.get_metrics(include_per_core=False)
                     global_metrics = metrics.get("global", {})
                     pps = global_metrics.get("current_pps", 0)
-                    bps = global_metrics.get("current_bps", 0)
                     tx_packets = global_metrics.get("total_tx_packets", 0)
-                    avg_latency = global_metrics.get("avg_latency_us", 0)
                     print(f"  [{i + 1:>{len(str(TRAFFIC_DURATION_SECONDS))}}] "
-                          f"PPS: {pps:,.2f} | BPS: {bps:,.2f} | "
-                          f"Avg Latency: {avg_latency:.2f} us | "
-                          f"Total TX: {tx_packets:,}")
+                          f"PPS: {pps:,.2f} | Total TX: {tx_packets:,}")
                 except Exception as e:
                     print(f"  An error occurred while getting metrics: {e}")
-                    break
+                    pass
 
-            # 4. Stop traffic generation
             print("\nStopping traffic...")
             result = client.stop_traffic()
             if not result.get("success"):
@@ -117,7 +123,6 @@ def main():
             else:
                 print("Traffic stopped successfully.")
 
-            # 5. Get final detailed stats
             print("\nFetching final detailed statistics...")
             stats = client.get_stats(detailed=True)
             print_final_stats(stats)
