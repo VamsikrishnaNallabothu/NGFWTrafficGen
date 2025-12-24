@@ -1,6 +1,7 @@
 #include "core/scheduler/flow_scheduler.hpp"
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 
 namespace trafficgen {
 
@@ -10,11 +11,12 @@ FlowScheduler::FlowScheduler() {
 FlowScheduler::~FlowScheduler() {
 }
 
-bool FlowScheduler::initialize() {
+bool FlowScheduler::initialize(const rte_ether_addr& src_mac) {
+    src_mac_ = src_mac;
     return true;
 }
 
-bool FlowScheduler::add_flow(const FlowConfigInternal& config) {
+bool FlowScheduler::add_flow(FlowConfigInternal& config) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     auto new_config = std::make_shared<FlowConfigInternal>();
@@ -25,63 +27,55 @@ bool FlowScheduler::add_flow(const FlowConfigInternal& config) {
     new_config->pps = config.pps;
     new_config->duration_seconds = config.duration_seconds;
     new_config->stateless = config.stateless;
-    new_config->template_packet = config.template_packet;
-    new_config->packets_sent.store(config.packets_sent.load(std::memory_order_relaxed),
-                                   std::memory_order_relaxed);
-    new_config->bytes_sent.store(config.bytes_sent.load(std::memory_order_relaxed),
-                                 std::memory_order_relaxed);
-    new_config->start_time_ns.store(config.start_time_ns.load(std::memory_order_relaxed),
-                                    std::memory_order_relaxed);
-    new_config->active.store(config.active.load(std::memory_order_relaxed),
-                             std::memory_order_relaxed);
-    
-    // Build packet template if not already built
-    if (new_config->template_packet.data.empty()) {
-        if (!packet_builder_.build_template(
-                new_config->template_packet,
-                new_config->flow_key,
-                new_config->packet_size,
-                new_config->protocol)) {
-            return false;
-        }
+    new_config->dst_mac = config.dst_mac;
+
+    // If the destination MAC is not provided, use broadcast as a fallback.
+    if (new_config->dst_mac.empty()) {
+        new_config->dst_mac = "FF:FF:FF:FF:FF:FF";
     }
-    
+
+    uint32_t template_packet_size = new_config->packet_size;
+    if (template_packet_size == 0) {
+        template_packet_size = 64;
+    }
+
+    char src_mac_str[18];
+    snprintf(src_mac_str, sizeof(src_mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+             src_mac_.addr_bytes[0], src_mac_.addr_bytes[1], src_mac_.addr_bytes[2],
+             src_mac_.addr_bytes[3], src_mac_.addr_bytes[4], src_mac_.addr_bytes[5]);
+
+    if (!packet_builder_.build_template(
+            new_config->template_packet,
+            new_config->flow_key,
+            template_packet_size,
+            new_config->protocol,
+            src_mac_str,
+            new_config->dst_mac)) {
+        return false;
+    }
+
+    // --- RESTORED LOGIC ---
     // Create token bucket for rate limiting
-    if (config.token_bucket) {
-        new_config->token_bucket = std::make_unique<TokenBucket>(
-            config.token_bucket->get_rate(), config.token_bucket->get_burst_size());
-    } else {
-        new_config->token_bucket = std::make_unique<TokenBucket>(
-            new_config->pps, new_config->pps / 10);  // Burst = 10% of rate
-    }
+    new_config->token_bucket = std::make_unique<TokenBucket>(
+        new_config->pps, new_config->pps > 0 ? new_config->pps / 10 : 1000);
 
     // Initialize TCP state for stateful TCP flows
     if (!new_config->stateless && new_config->protocol == "tcp") {
-        if (config.tcp_state) {
-            new_config->tcp_state = std::make_unique<TCPConnectionState>(*config.tcp_state);
-        } else {
-            new_config->tcp_state = std::make_unique<TCPConnectionState>();
-            new_config->tcp_state->src_ip = new_config->flow_key.src_ip;
-            new_config->tcp_state->dst_ip = new_config->flow_key.dst_ip;
-            new_config->tcp_state->src_port = new_config->flow_key.src_port;
-            new_config->tcp_state->dst_port = new_config->flow_key.dst_port;
-            new_config->tcp_state->state = TCPConnectionState::State::CLOSED;
-            new_config->tcp_state->active = false;
-        }
-        if (config.tcp_state_machine) {
-            new_config->tcp_state_machine = std::make_unique<TCPStateMachine>(*config.tcp_state_machine);
-        } else {
-            new_config->tcp_state_machine = std::make_unique<TCPStateMachine>();
-        }
+        new_config->tcp_state = std::make_unique<TCPConnectionState>();
+        new_config->tcp_state->src_ip = new_config->flow_key.src_ip;
+        new_config->tcp_state->dst_ip = new_config->flow_key.dst_ip;
+        new_config->tcp_state->src_port = new_config->flow_key.src_port;
+        new_config->tcp_state->dst_port = new_config->flow_key.dst_port;
+        new_config->tcp_state->state = TCPConnectionState::State::CLOSED;
+        new_config->tcp_state->active = false;
+        new_config->tcp_state_machine = std::make_unique<TCPStateMachine>();
     }
-    
-    // Insert / update flow
+    // --- END RESTORED LOGIC ---
+
     flows_[config.flow_id] = new_config;
 
-    // Update lookup table for RX path (both directions)
     const FlowConfigInternal& stored = *flows_[config.flow_id];
     flow_lookup_[stored.flow_key] = config.flow_id;
-    // Reverse key for inbound packets
     FlowKey reverse_key = stored.flow_key;
     std::swap(reverse_key.src_ip, reverse_key.dst_ip);
     std::swap(reverse_key.src_port, reverse_key.dst_port);
@@ -97,7 +91,6 @@ bool FlowScheduler::remove_flow(uint32_t flow_id) {
         return false;
     }
 
-    // Remove from lookup map (both directions)
     FlowKey key = it->second->flow_key;
     flow_lookup_.erase(key);
     FlowKey reverse_key = key;
@@ -124,17 +117,6 @@ bool FlowScheduler::start_flow(uint32_t flow_id) {
     it->second->start_time_ns.store(now_ns, std::memory_order_relaxed);
     it->second->active.store(true, std::memory_order_relaxed);
 
-    // Initialize TCP connection state for stateful TCP flows
-    if (!it->second->stateless && it->second->protocol == "tcp" &&
-        it->second->tcp_state) {
-        TCPConnectionState& conn = *it->second->tcp_state;
-        conn.state = TCPConnectionState::State::ESTABLISHED;
-        conn.active = true;
-        // Simple initial sequence number
-        conn.send_seq = 1;
-        conn.recv_seq = 0;
-    }
-    
     if (it->second->token_bucket) {
         it->second->token_bucket->reset();
     }
@@ -171,19 +153,19 @@ std::vector<uint32_t> FlowScheduler::get_ready_flows(uint32_t max_flows) {
             continue;
         }
         
-        // Check if flow expired
         if (is_flow_expired_locked(config, now_ns)) {
             config.active.store(false, std::memory_order_relaxed);
             continue;
         }
         
-        // Check if flow has tokens available
-        if (config.token_bucket && config.token_bucket->try_consume(1) > 0) {
-            ready_flows.push_back(flow_id);
-            
-            if (ready_flows.size() >= max_flows) {
-                break;
+        if (config.token_bucket) {
+            if (config.token_bucket->try_consume(1) > 0) {
+                ready_flows.push_back(flow_id);
             }
+        }
+
+        if (ready_flows.size() >= max_flows) {
+            break;
         }
     }
     
@@ -191,8 +173,6 @@ std::vector<uint32_t> FlowScheduler::get_ready_flows(uint32_t max_flows) {
 }
 
 void FlowScheduler::update_flow_stats(uint32_t flow_id, uint64_t packets, uint64_t bytes) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    
     auto it = flows_.find(flow_id);
     if (it != flows_.end()) {
         it->second->packets_sent.fetch_add(packets, std::memory_order_relaxed);
@@ -269,10 +249,8 @@ void FlowScheduler::handle_tcp_rx(const FlowKey& key,
 
     TCPConnectionState& conn = *flow.tcp_state;
 
-    // Extract flags
     uint8_t flags = tcp_hdr->tcp_flags;
 
-    // SYN+ACK handshake completion
     if ((flags & (RTE_TCP_SYN_FLAG | RTE_TCP_ACK_FLAG)) ==
         (RTE_TCP_SYN_FLAG | RTE_TCP_ACK_FLAG)) {
         conn.recv_seq = rte_be_to_cpu_32(tcp_hdr->sent_seq);
@@ -289,7 +267,6 @@ void FlowScheduler::handle_tcp_rx(const FlowKey& key,
         }
     }
 
-    // Very simple receive‑side sequence tracking
     if (payload_len > 0) {
         conn.recv_seq = rte_be_to_cpu_32(tcp_hdr->sent_seq) + payload_len;
     }
@@ -313,14 +290,13 @@ bool FlowScheduler::is_flow_expired(uint32_t flow_id) const {
 
 bool FlowScheduler::is_flow_expired_locked(const FlowConfigInternal& config,
                                            uint64_t now_ns) const {
-    // If duration is 0, flow never expires
     if (config.duration_seconds == 0) {
         return false;
     }
 
     uint64_t start_time = config.start_time_ns.load(std::memory_order_relaxed);
     if (start_time == 0) {
-        return false;  // Not started yet
+        return false;
     }
 
     uint64_t elapsed_ns = now_ns - start_time;
@@ -339,14 +315,4 @@ size_t FlowScheduler::get_flow_count() const {
     return flows_.size();
 }
 
-bool FlowScheduler::should_flow_be_active(const FlowConfigInternal& config) const {
-    auto now = std::chrono::steady_clock::now();
-    uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                          now.time_since_epoch())
-                          .count();
-    return config.active.load(std::memory_order_relaxed) &&
-           !is_flow_expired_locked(config, now_ns);
-}
-
 } // namespace trafficgen
-
