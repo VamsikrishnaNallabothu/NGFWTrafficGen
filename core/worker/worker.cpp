@@ -8,11 +8,11 @@
 #include <pthread.h>
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 #include <chrono>
 
 namespace trafficgen {
 
-// Helper macro to get timestamp field
 #define TIMESTAMP_DYNFIELD(mbuf) \
     RTE_MBUF_DYNFIELD((mbuf), config_.timestamp_dynfield_offset, uint64_t*)
 
@@ -26,7 +26,7 @@ Worker::~Worker() {
 
 bool Worker::start() {
     if (running_.load(std::memory_order_relaxed)) {
-        return true;  // Already running
+        return true;
     }
     
     should_stop_.store(false, std::memory_order_relaxed);
@@ -52,11 +52,11 @@ bool Worker::is_running() const {
     return running_.load(std::memory_order_relaxed);
 }
 
-CoreStats Worker::get_stats() const {
+CoreStatsSnapshot Worker::get_stats() const {
     if (config_.metrics_collector) {
         return config_.metrics_collector->get_core_stats(config_.core_id);
     }
-    return CoreStats();
+    return CoreStatsSnapshot();
 }
 
 uint32_t Worker::get_core_id() const {
@@ -64,43 +64,34 @@ uint32_t Worker::get_core_id() const {
 }
 
 void Worker::worker_loop() {
-    // Register this thread with the DPDK EAL. This is crucial for non-EAL threads
-    // that need to call DPDK functions. It also sets the thread's affinity.
-    if (rte_eal_thread_register() < 0) {
+    if (rte_thread_register() < 0) {
         std::cerr << "Error: Failed to register worker thread for core " << config_.core_id << std::endl;
         running_.store(false, std::memory_order_relaxed);
         return;
     }
     
-    // Pre-allocate mbuf array for bursts
     std::vector<rte_mbuf*> tx_mbufs(config_.tx_burst_size, nullptr);
     std::vector<rte_mbuf*> rx_mbufs(config_.rx_burst_size, nullptr);
     
-    // Get local mempool for this worker's socket
     rte_mempool* mempool = nullptr;
     if (config_.mempool_manager) {
-        // Get the socket ID for the worker's core
         unsigned int socket_id = rte_lcore_to_socket_id(config_.core_id);
         mempool = config_.mempool_manager->get_mempool(socket_id);
     }
     
     if (mempool == nullptr) {
-        // Error: no mempool available for this core's socket
         running_.store(false, std::memory_order_relaxed);
         return;
     }
     
-    // Initialize packet mutator
     PacketMutator mutator;
     mutator.initialize(static_cast<uint64_t>(config_.core_id));
     
     while (!should_stop_.load(std::memory_order_relaxed)) {
-        // Process flows and build packets for transmission
         if (config_.flow_scheduler) {
             process_flows();
         }
         
-        // Handle RX if enabled
         if (config_.enable_rx) {
             uint16_t rx_count = receive_burst(rx_mbufs.data(), config_.rx_burst_size);
             if (rx_count > 0) {
@@ -108,13 +99,9 @@ void Worker::worker_loop() {
             }
         }
         
-        // Small delay to prevent busy-waiting
-        // In production, this might be optimized or removed based on performance requirements
         rte_pause();
     }
     
-    // Drain any remaining TX packets
-    // Final cleanup handled by stop()
     running_.store(false, std::memory_order_relaxed);
 }
 
@@ -125,18 +112,18 @@ uint16_t Worker::transmit_burst(rte_mbuf** mbufs, uint16_t count) {
     
     uint16_t sent = rte_eth_tx_burst(config_.port_id, config_.queue_id, mbufs, count);
     
-    // Update statistics
     if (sent > 0 && config_.metrics_collector) {
         uint64_t total_bytes = 0;
         for (uint16_t i = 0; i < sent; ++i) {
             total_bytes += rte_pktmbuf_pkt_len(mbufs[i]);
         }
         
+        // --- DEBUGGING ---
+        std::cout << "[Worker " << config_.core_id << "] transmit_burst: calling update_tx_stats with " << sent << " packets." << std::endl;
         config_.metrics_collector->update_tx_stats(
             config_.core_id, sent, total_bytes);
     }
     
-    // Free mbufs that weren't sent
     if (sent < count && config_.mempool_manager) {
         for (uint16_t i = sent; i < count; ++i) {
             if (mbufs[i] != nullptr) {
@@ -164,7 +151,6 @@ void Worker::process_received_packets(rte_mbuf** mbufs, uint16_t count) {
         return;
     }
     
-    // Timestamp for latency calculation
     uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
 
@@ -178,7 +164,6 @@ void Worker::process_received_packets(rte_mbuf** mbufs, uint16_t count) {
 
         total_bytes += rte_pktmbuf_pkt_len(mbuf);
 
-        // Latency measurement
         if (config_.metrics_collector && config_.timestamp_dynfield_offset != -1) {
             uint64_t* ts_ptr = TIMESTAMP_DYNFIELD(mbuf);
             if (ts_ptr != nullptr) {
@@ -191,7 +176,6 @@ void Worker::process_received_packets(rte_mbuf** mbufs, uint16_t count) {
             }
         }
 
-        // TCP RX handling for stateful flows
         if (config_.flow_scheduler) {
             rte_ether_hdr* eth_hdr = rte_pktmbuf_mtod(mbuf, rte_ether_hdr*);
             (void)eth_hdr;
@@ -220,12 +204,10 @@ void Worker::process_received_packets(rte_mbuf** mbufs, uint16_t count) {
             }
         }
 
-        // Free received packet
         rte_pktmbuf_free(mbuf);
         mbufs[i] = nullptr;
     }
 
-    // Update RX statistics (aggregate)
     if (config_.metrics_collector && total_bytes > 0) {
         config_.metrics_collector->update_rx_stats(
             config_.core_id, count, total_bytes);
@@ -237,29 +219,25 @@ void Worker::process_flows() {
         return;
     }
     
-    // Get ready flows
     std::vector<uint32_t> ready_flows = config_.flow_scheduler->get_ready_flows(
         config_.tx_burst_size);
-    
+
     if (ready_flows.empty()) {
         return;
     }
     
-    // Get mempool for this worker's socket
     unsigned int socket_id = rte_lcore_to_socket_id(config_.core_id);
     rte_mempool* mempool = config_.mempool_manager->get_mempool(socket_id);
     if (mempool == nullptr) {
         return;
     }
     
-    // Pre-allocate mbufs for burst
     std::vector<rte_mbuf*> mbufs(config_.tx_burst_size, nullptr);
     uint16_t mbuf_count = 0;
     
     PacketMutator mutator;
     mutator.initialize(static_cast<uint64_t>(config_.core_id));
     
-    // Build packets for each ready flow
     for (uint32_t flow_id : ready_flows) {
         if (mbuf_count >= config_.tx_burst_size) {
             break;
@@ -270,19 +248,27 @@ void Worker::process_flows() {
             continue;
         }
         
-        // Allocate mbuf
         if (config_.mempool_manager->allocate_burst(mempool, &mbufs[mbuf_count], 1) == 0) {
-            continue;  // Failed to allocate
+            continue;
         }
         
         rte_mbuf* mbuf = mbufs[mbuf_count];
         if (mbuf == nullptr) {
             continue;
         }
-        
-        // Clone template and mutate
-        if (mutator.clone_and_mutate(mbuf, flow->template_packet, 0, true)) {
-            // For stateful TCP flows, set sequence/ACK numbers and flags
+
+        uint32_t packet_size = flow->packet_size;
+        if (packet_size == 0 && config_.imix_engine) {
+            packet_size = config_.imix_engine->select_next_packet_size();
+        }
+        if (packet_size == 0) {
+            packet_size = 64;
+        }
+
+        PacketTemplate final_template = flow->template_packet;
+        final_template.total_size = packet_size;
+
+        if (mutator.clone_and_mutate(mbuf, final_template, 0, true)) {
             if (!flow->stateless && flow->protocol == "tcp" &&
                 flow->tcp_state && flow->tcp_state_machine) {
                 rte_ether_hdr* eth_hdr = rte_pktmbuf_mtod(mbuf, rte_ether_hdr*);
@@ -293,10 +279,8 @@ void Worker::process_flows() {
 
                 TCPConnectionState& conn = *flow->tcp_state;
 
-                // For now we assume ESTABLISHED state and send pure ACK packets.
                 tcp_hdr->tcp_flags = RTE_TCP_ACK_FLAG;
                 tcp_hdr->sent_seq = rte_cpu_to_be_32(conn.send_seq);
-                // ACK should reflect what we are acknowledging to the peer
                 tcp_hdr->recv_ack = rte_cpu_to_be_32(conn.send_ack);
 
                 uint16_t l4_len = rte_be_to_cpu_16(ip_hdr->total_length) - sizeof(rte_ipv4_hdr);
@@ -310,7 +294,6 @@ void Worker::process_flows() {
                 mutator.recalculate_tcp_checksum(ip_hdr, tcp_hdr);
             }
 
-            // Stamp TX timestamp for latency measurement
             if (config_.timestamp_dynfield_offset != -1) {
                 uint64_t* ts_ptr = TIMESTAMP_DYNFIELD(mbuf);
                 if (ts_ptr != nullptr) {
@@ -322,18 +305,15 @@ void Worker::process_flows() {
 
             mbuf_count++;
 
-            // Update flow statistics
             uint64_t pkt_len = rte_pktmbuf_pkt_len(mbuf);
             flow->packets_sent.fetch_add(1, std::memory_order_relaxed);
             flow->bytes_sent.fetch_add(pkt_len, std::memory_order_relaxed);
         } else {
-            // Failed to build packet, free mbuf
             rte_pktmbuf_free(mbuf);
             mbufs[mbuf_count] = nullptr;
         }
     }
     
-    // Transmit burst
     if (mbuf_count > 0) {
         transmit_burst(mbufs.data(), mbuf_count);
     }
@@ -364,10 +344,6 @@ rte_mbuf* Worker::build_packet_from_template(const PacketTemplate& template_in) 
     }
     
     return mbuf;
-}
-
-void Worker::set_cpu_affinity() {
-    // This function is no longer needed as rte_eal_thread_register handles affinity.
 }
 
 } // namespace trafficgen
